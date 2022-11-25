@@ -71,7 +71,7 @@ class MFP {
 
 [[nodiscard]] std::vector<O> stdlib_cpp(const std::vector<I>& is) {
   std::vector<int> output(is.size());
-  std::exclusive_scan(cbegin(is), cend(is), begin(output), 0, f);
+  std::inclusive_scan(cbegin(is), cend(is), begin(output), f, 0);
   std::transform(cbegin(output), cend(output), begin(output), r);
 
   return output;
@@ -90,7 +90,7 @@ class MFP {
   return output;
 }
 
-[[nodiscard]] std::vector<O> range_v3(const std::vector<I>& is) {
+[[nodiscard]] std::vector<O> range_exclusive_scan(const std::vector<I>& is) {
   using namespace ranges;
   const auto us = is | views::exclusive_scan(0, f) | views::transform(r);
 
@@ -111,9 +111,12 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
 int main() {
   const std::vector<I> is = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  std::cout << "by_hand(is)         = " << mpf_by_hand(is) << std::endl;
-  std::cout << "by_hand_as_list(is) = " << list_by_hand(is) << std::endl;
-  std::cout << "rxcpp_scan(is)      = " << rxcpp_scan(is) << std::endl;
-  std::cout << "lib_cpp(is)         = " << stdlib_cpp(is) << std::endl;
-  std::cout << "range_v3(is)        = " << range_v3(is) << std::endl;
+  std::cout << "by_hand(is)              = " << mpf_by_hand(is) << std::endl;
+  std::cout << "by_hand_as_list(is)      = " << list_by_hand(is) << std::endl;
+  std::cout << "rxcpp_scan(is)           = " << rxcpp_scan(is)
+            << " ← rxcpp’s scan drops initial value." << std::endl;
+  std::cout << "lib_cpp(is)              = " << stdlib_cpp(is)
+            << " ← std::inclusive_scan drops initial value." << std::endl;
+  std::cout << "range_exclusive_scan(is) = " << range_exclusive_scan(is)
+            << " ← exclusive_scan drops last value." << std::endl;
 }
