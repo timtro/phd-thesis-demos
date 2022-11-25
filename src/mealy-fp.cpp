@@ -28,7 +28,7 @@ class MFP {
   std::pair<O, MFP> operator()(I x) const { return make_MFP(f(c, x)); }
 };
 
-[[nodiscard]] std::vector<O> by_hand(std::vector<I> is) {
+[[nodiscard]] std::vector<O> mpf_by_hand(const std::vector<I>& is) {
   const auto [o0, l0] = MFP::make_MFP(0);
   const auto [o1, l1] = l0(is[0]);
   const auto [o2, l2] = l1(is[1]);
@@ -44,7 +44,7 @@ class MFP {
   return {o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10};
 }
 
-[[nodiscard]] std::vector<O> by_hand_as_list(std::vector<I> is) {
+[[nodiscard]] std::vector<O> list_by_hand(const std::vector<I>& is) {
   return {
       r(0),
       r(f(0, is[0])),
@@ -69,7 +69,7 @@ class MFP {
           is[9]))};
 }
 
-std::vector<O> lib_cpp(std::vector<I> is) {
+[[nodiscard]] std::vector<O> stdlib_cpp(const std::vector<I>& is) {
   std::vector<int> output(is.size());
   std::exclusive_scan(cbegin(is), cend(is), begin(output), 0, f);
   std::transform(cbegin(output), cend(output), begin(output), r);
@@ -77,7 +77,7 @@ std::vector<O> lib_cpp(std::vector<I> is) {
   return output;
 }
 
-std::vector<O> rxcpp_scan(std::vector<I> is) {
+[[nodiscard]] std::vector<O> rxcpp_scan(const std::vector<I>& is) {
   auto oi = rxcpp::observable<>::create<I>([&](rxcpp::subscriber<I> s) {
     for (auto each : is) s.on_next(each);
     s.on_completed();
@@ -90,7 +90,7 @@ std::vector<O> rxcpp_scan(std::vector<I> is) {
   return output;
 }
 
-std::vector<O> range_v3(std::vector<I> is) {
+[[nodiscard]] std::vector<O> range_v3(const std::vector<I>& is) {
   using namespace ranges;
   const auto us = is | views::exclusive_scan(0, f) | views::transform(r);
 
@@ -99,7 +99,7 @@ std::vector<O> range_v3(std::vector<I> is) {
 
 template <class T>
 std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
-std::string separator = "[ ";
+  std::string separator = "[ ";
   for (const auto x : v) {
     std::cout << separator << x;
     separator = ", ";
@@ -111,9 +111,9 @@ std::string separator = "[ ";
 int main() {
   const std::vector<I> is = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  std::cout << "by_hand(is)         = " << by_hand(is) << std::endl;
-  std::cout << "by_hand_as_list(is) = " << by_hand_as_list(is) << std::endl;
+  std::cout << "by_hand(is)         = " << mpf_by_hand(is) << std::endl;
+  std::cout << "by_hand_as_list(is) = " << list_by_hand(is) << std::endl;
   std::cout << "rxcpp_scan(is)      = " << rxcpp_scan(is) << std::endl;
-  std::cout << "lib_cpp(is)         = " << lib_cpp(is) << std::endl;
+  std::cout << "lib_cpp(is)         = " << stdlib_cpp(is) << std::endl;
   std::cout << "range_v3(is)        = " << range_v3(is) << std::endl;
 }
