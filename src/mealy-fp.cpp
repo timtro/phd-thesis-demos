@@ -18,31 +18,33 @@ C f(C c, I x) { return c + 1 * x; }
 
 O r(C c) { return 1 * c; }
 
-class MFP {
-  C c;
-  MFP(C c) : c{c} {}
+class MooreFixpoint;
 
- public:
-  static std::pair<O, MFP> make_MFP(C c0) { return {r(c0), MFP{c0}}; }
-
-  std::pair<O, MFP> operator()(I x) const { return make_MFP(f(c, x)); }
+struct Lambda_val {
+  std::function<MooreFixpoint(I)> lambda;
+  O output;
 };
 
-[[nodiscard]] std::vector<O> mpf_by_hand(const std::vector<I>& is) {
-  const auto [o0, l0] = MFP::make_MFP(0);
-  const auto [o1, l1] = l0(is[0]);
-  const auto [o2, l2] = l1(is[1]);
-  const auto [o3, l3] = l2(is[2]);
-  const auto [o4, l4] = l3(is[3]);
-  const auto [o5, l5] = l4(is[4]);
-  const auto [o6, l6] = l5(is[5]);
-  const auto [o7, l7] = l6(is[6]);
-  const auto [o8, l8] = l7(is[7]);
-  const auto [o9, l9] = l8(is[8]);
-  const auto [o10, l10] = l9(is[9]);
+class MooreFixpoint {
+ public:
+  Lambda_val data;
 
-  return {o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10};
-}
+  MooreFixpoint(C c, std::function<C(C, I)> f, std::function<O(C)> r)
+      : c(c), evolver(f), readout(r) {
+    data = {[this, f, r, c](I i) { return MooreFixpoint(evolver(c, i), f, r); },
+            r(c)};
+  }
+
+  MooreFixpoint operator()(I i) {
+    const auto next_state = evolver(c, i);
+    return MooreFixpoint(next_state, evolver, readout);
+  }
+
+ private:
+  C c;
+  std::function<C(C, I)> evolver;
+  std::function<O(C)> readout;
+};
 
 [[nodiscard]] std::vector<O> list_by_hand(const std::vector<I>& is) {
   return {
@@ -67,6 +69,23 @@ class MFP {
               is[7]),
             is[8]),
           is[9]))};
+}
+
+[[nodiscard]] std::vector<O> fixpoint_class_by_hand(const std::vector<I>& is) {
+  const auto Lambda = MooreFixpoint(0, f, r);
+
+  const auto [l0, o0] = Lambda.data;
+  const auto [l1, o1] = l0(is[0]).data;
+  const auto [l2, o2] = l1(is[1]).data;
+  const auto [l3, o3] = l2(is[2]).data;
+  const auto [l4, o4] = l3(is[3]).data;
+  const auto [l5, o5] = l4(is[4]).data;
+  const auto [l6, o6] = l5(is[5]).data;
+  const auto [l7, o7] = l6(is[6]).data;
+  const auto [l8, o8] = l7(is[7]).data;
+  const auto [l9, o9] = l8(is[8]).data;
+  const auto [l10, o10] = l9(is[9]).data;
+  return {o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10};
 }
 
 [[nodiscard]] std::vector<O> stdlib_cpp(const std::vector<I>& is) {
@@ -111,12 +130,13 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
 int main() {
   const std::vector<I> is = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  std::cout << "by_hand(is)              = " << mpf_by_hand(is) << std::endl;
-  std::cout << "by_hand_as_list(is)      = " << list_by_hand(is) << std::endl;
-  std::cout << "rxcpp_scan(is)           = " << rxcpp_scan(is)
+  std::cout << "by_hand_as_list(is)        = " << list_by_hand(is) << std::endl;
+  std::cout << "fixpoint_class_by_hand(is) = " << fixpoint_class_by_hand(is)
+            << std::endl;
+  std::cout << "rxcpp_scan(is)             = " << rxcpp_scan(is)
             << " ← rxcpp’s scan drops initial value." << std::endl;
-  std::cout << "lib_cpp(is)              = " << stdlib_cpp(is)
+  std::cout << "lib_cpp(is)                = " << stdlib_cpp(is)
             << " ← std::inclusive_scan drops initial value." << std::endl;
-  std::cout << "range_exclusive_scan(is) = " << range_exclusive_scan(is)
+  std::cout << "range_exclusive_scan(is)   = " << range_exclusive_scan(is)
             << " ← exclusive_scan drops last value." << std::endl;
 }
