@@ -42,9 +42,8 @@ class MooreFixpoint {
   std::function<O(C)> readout;
 };
 
-[[nodiscard]] std::vector<O> list_by_hand(const std::vector<I>& is,
-                                          std::function<C(C, I)> f,
-                                          std::function<O(C)> r) {
+std::vector<O> list_by_hand(const std::vector<I>& is, std::function<C(C, I)> f,
+                            std::function<O(C)> r) {
   return {
       r(0),
       r(f(0, is[0])),
@@ -69,9 +68,9 @@ class MooreFixpoint {
           is[9]))};
 }
 
-[[nodiscard]] std::vector<O> fixpoint_class_by_hand(const std::vector<I>& is,
-                                                    std::function<C(C, I)> f,
-                                                    std::function<O(C)> r) {
+std::vector<O> fixpoint_class_by_hand(const std::vector<I>& is,
+                                      std::function<C(C, I)> f,
+                                      std::function<O(C)> r) {
   const auto Lambda = MooreFixpoint(0, f, r);
 
   const auto [l0, o0] = Lambda.data;
@@ -88,9 +87,8 @@ class MooreFixpoint {
   return {o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10};
 }
 
-[[nodiscard]] std::vector<O> stdlib_cpp(const std::vector<I>& is,
-                                        std::function<C(C, I)> f,
-                                        std::function<O(C)> r) {
+std::vector<O> stdlib_cpp(const std::vector<I>& is, std::function<C(C, I)> f,
+                          std::function<O(C)> r) {
   std::vector<int> output(is.size());
   std::inclusive_scan(cbegin(is), cend(is), begin(output), f, 0);
   std::transform(cbegin(output), cend(output), begin(output), r);
@@ -98,9 +96,8 @@ class MooreFixpoint {
   return output;
 }
 
-[[nodiscard]] std::vector<O> rxcpp_scan(const std::vector<I>& is,
-                                        std::function<C(C, I)> f,
-                                        std::function<O(C)> r) {
+std::vector<O> rxcpp_scan(const std::vector<I>& is, std::function<C(C, I)> f,
+                          std::function<O(C)> r) {
   auto oi = rxcpp::observable<>::create<I>([&](rxcpp::subscriber<I> s) {
     for (auto each : is) s.on_next(each);
     s.on_completed();
@@ -113,9 +110,9 @@ class MooreFixpoint {
   return output;
 }
 
-[[nodiscard]] std::vector<O> range_exclusive_scan(const std::vector<I>& is,
-                                                  std::function<C(C, I)> f,
-                                                  std::function<O(C)> r) {
+std::vector<O> range_exclusive_scan(const std::vector<I>& is,
+                                    std::function<C(C, I)> f,
+                                    std::function<O(C)> r) {
   using namespace ranges;
   const auto us = is | views::exclusive_scan(0, f) | views::transform(r);
 
@@ -139,14 +136,22 @@ int main() {
   constexpr auto f = [](C c, I x) -> C { return c + x; };
   constexpr auto r = [](C c) -> O { return c; };
 
-  std::cout << "by_hand_as_list(is)        = " << list_by_hand(is, f, r)
-            << std::endl;
-  std::cout << "fixpoint_class_by_hand(is) = "
-            << fixpoint_class_by_hand(is, f, r) << std::endl;
+  // clang-format off
+  std::cout <<
+    "by_hand_as_list(is)        = " << list_by_hand(is, f, r)
+      << std::endl;
+
+  std::cout <<
+    "fixpoint_class_by_hand(is) = " << fixpoint_class_by_hand(is, f, r) 
+      << std::endl;
+
   std::cout << "rxcpp_scan(is)             = " << rxcpp_scan(is, f, r)
             << " ← rxcpp’s scan drops initial value." << std::endl;
+
   std::cout << "lib_cpp(is)                = " << stdlib_cpp(is, f, r)
             << " ← std::inclusive_scan drops initial value." << std::endl;
+
   std::cout << "range_exclusive_scan(is)   = " << range_exclusive_scan(is, f, r)
             << " ← exclusive_scan drops last value." << std::endl;
+  // clang-format on
 }
