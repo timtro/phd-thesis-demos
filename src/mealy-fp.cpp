@@ -17,29 +17,32 @@ using Input = int;
 using TransitionMap = std::function<State(State, Input)>;
 using ReadoutMap = std::function<Output(State)>;
 
+template<typename S>
 class MooreFixpoint;
 
+template<typename S>
 struct Lambda_val {
-  std::function<MooreFixpoint(Input)> lambda;
+  std::function<MooreFixpoint<S>(Input)> lambda;
   Output output;
 };
 
+template<typename S>
 class MooreFixpoint {
  public:
-  Lambda_val value;
+  Lambda_val<S> value;
 
-  MooreFixpoint(State c, TransitionMap f, ReadoutMap r) : c(c), tmap(f), rout(r) {
-    value = {[this, f, r, c](Input i) { return MooreFixpoint(tmap(c, i), f, r); },
-             r(c)};
+  MooreFixpoint(S s, TransitionMap f, ReadoutMap r) : s(s), tmap(f), rout(r) {
+    value = {[this, f, r, s](Input i) { return MooreFixpoint(tmap(s, i), f, r); },
+             r(s)};
   }
 
   MooreFixpoint operator()(Input i) {
-    const auto next_state = tmap(c, i);
+    const auto next_state = tmap(s, i);
     return MooreFixpoint(next_state, tmap, rout);
   }
 
  private:
-  State c;
+  State s;
   TransitionMap tmap;
   ReadoutMap rout;
 };
