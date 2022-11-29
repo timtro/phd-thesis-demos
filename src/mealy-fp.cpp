@@ -10,42 +10,42 @@
 #include <utility>
 #include <vector>
 
-using S = int;
-using O = int;
-using I = int;
+using State = int;
+using Output = int;
+using Input = int;
 
-using TransitionMap = std::function<S(S, I)>;
-using ReadoutMap = std::function<O(S)>;
+using TransitionMap = std::function<State(State, Input)>;
+using ReadoutMap = std::function<Output(State)>;
 
 class MooreFixpoint;
 
 struct Lambda_val {
-  std::function<MooreFixpoint(I)> lambda;
-  O output;
+  std::function<MooreFixpoint(Input)> lambda;
+  Output output;
 };
 
 class MooreFixpoint {
  public:
   Lambda_val value;
 
-  MooreFixpoint(S c, TransitionMap f, ReadoutMap r) : c(c), tmap(f), rout(r) {
-    value = {[this, f, r, c](I i) { return MooreFixpoint(tmap(c, i), f, r); },
+  MooreFixpoint(State c, TransitionMap f, ReadoutMap r) : c(c), tmap(f), rout(r) {
+    value = {[this, f, r, c](Input i) { return MooreFixpoint(tmap(c, i), f, r); },
              r(c)};
   }
 
-  MooreFixpoint operator()(I i) {
+  MooreFixpoint operator()(Input i) {
     const auto next_state = tmap(c, i);
     return MooreFixpoint(next_state, tmap, rout);
   }
 
  private:
-  S c;
+  State c;
   TransitionMap tmap;
   ReadoutMap rout;
 };
 
-auto list_by_hand(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
-    -> std::vector<O> {
+auto list_by_hand(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+    -> std::vector<Output> {
   return {
       r(0),
       r(f(0, is[0])),
@@ -70,8 +70,8 @@ auto list_by_hand(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
           is[9]))};
 }
 
-auto fixpoint_class_by_hand(const std::vector<I>& is, TransitionMap f,
-                            ReadoutMap r) -> std::vector<O> {
+auto fixpoint_class_by_hand(const std::vector<Input>& is, TransitionMap f,
+                            ReadoutMap r) -> std::vector<Output> {
   const auto Lambda = MooreFixpoint(0, f, r);
 
   const auto [l0, o0] = Lambda.value;
@@ -88,8 +88,8 @@ auto fixpoint_class_by_hand(const std::vector<I>& is, TransitionMap f,
   return {o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10};
 }
 
-auto stdlib_cpp(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
-    -> std::vector<O> {
+auto stdlib_cpp(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+    -> std::vector<Output> {
   std::vector<int> output(is.size());
   std::inclusive_scan(cbegin(is), cend(is), begin(output), f, 0);
   std::transform(cbegin(output), cend(output), begin(output), r);
@@ -97,22 +97,22 @@ auto stdlib_cpp(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
   return output;
 }
 
-auto rxcpp_scan(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
-    -> std::vector<O> {
-  auto oi = rxcpp::observable<>::create<I>([&](rxcpp::subscriber<I> s) {
+auto rxcpp_scan(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+    -> std::vector<Output> {
+  auto oi = rxcpp::observable<>::create<Input>([&](rxcpp::subscriber<Input> s) {
     for (auto each : is) s.on_next(each);
     s.on_completed();
   });
 
-  std::vector<O> output;
+  std::vector<Output> output;
   auto us = oi.scan(0, f).map(r);
-  us.subscribe([&output](O v) { output.push_back(v); });
+  us.subscribe([&output](Output v) { output.push_back(v); });
 
   return output;
 }
 
-auto range_exclusive_scan(const std::vector<I>& is, TransitionMap f,
-                          ReadoutMap r) -> std::vector<O> {
+auto range_exclusive_scan(const std::vector<Input>& is, TransitionMap f,
+                          ReadoutMap r) -> std::vector<Output> {
   using namespace ranges;
   const auto us = is | views::exclusive_scan(0, f) | views::transform(r);
 
@@ -131,10 +131,10 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
 }
 
 int main() {
-  const std::vector<I> is = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  const std::vector<Input> is = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  constexpr auto f = [](S c, I x) -> S { return c + x; };
-  constexpr auto r = [](S c) -> O { return c; };
+  constexpr auto f = [](State c, Input x) -> State { return c + x; };
+  constexpr auto r = [](State c) -> Output { return c; };
 
   // clang-format off
   std::cout <<
