@@ -10,9 +10,12 @@
 #include <utility>
 #include <vector>
 
-using C = int;
+using S = int;
 using O = int;
 using I = int;
+
+using TransitionMap = std::function<S(S, I)>;
+using ReadoutMap = std::function<O(S)>;
 
 class MooreFixpoint;
 
@@ -23,27 +26,26 @@ struct Lambda_val {
 
 class MooreFixpoint {
  public:
-  Lambda_val data;
+  Lambda_val value;
 
-  MooreFixpoint(C c, std::function<C(C, I)> f, std::function<O(C)> r)
-      : c(c), evolver(f), readout(r) {
-    data = {[this, f, r, c](I i) { return MooreFixpoint(evolver(c, i), f, r); },
-            r(c)};
+  MooreFixpoint(S c, TransitionMap f, ReadoutMap r) : c(c), tmap(f), rout(r) {
+    value = {[this, f, r, c](I i) { return MooreFixpoint(tmap(c, i), f, r); },
+             r(c)};
   }
 
   MooreFixpoint operator()(I i) {
-    const auto next_state = evolver(c, i);
-    return MooreFixpoint(next_state, evolver, readout);
+    const auto next_state = tmap(c, i);
+    return MooreFixpoint(next_state, tmap, rout);
   }
 
  private:
-  C c;
-  std::function<C(C, I)> evolver;
-  std::function<O(C)> readout;
+  S c;
+  TransitionMap tmap;
+  ReadoutMap rout;
 };
 
-std::vector<O> list_by_hand(const std::vector<I>& is, std::function<C(C, I)> f,
-                            std::function<O(C)> r) {
+auto list_by_hand(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
+    -> std::vector<O> {
   return {
       r(0),
       r(f(0, is[0])),
@@ -68,27 +70,26 @@ std::vector<O> list_by_hand(const std::vector<I>& is, std::function<C(C, I)> f,
           is[9]))};
 }
 
-std::vector<O> fixpoint_class_by_hand(const std::vector<I>& is,
-                                      std::function<C(C, I)> f,
-                                      std::function<O(C)> r) {
+auto fixpoint_class_by_hand(const std::vector<I>& is, TransitionMap f,
+                            ReadoutMap r) -> std::vector<O> {
   const auto Lambda = MooreFixpoint(0, f, r);
 
-  const auto [l0, o0] = Lambda.data;
-  const auto [l1, o1] = l0(is[0]).data;
-  const auto [l2, o2] = l1(is[1]).data;
-  const auto [l3, o3] = l2(is[2]).data;
-  const auto [l4, o4] = l3(is[3]).data;
-  const auto [l5, o5] = l4(is[4]).data;
-  const auto [l6, o6] = l5(is[5]).data;
-  const auto [l7, o7] = l6(is[6]).data;
-  const auto [l8, o8] = l7(is[7]).data;
-  const auto [l9, o9] = l8(is[8]).data;
-  const auto [l10, o10] = l9(is[9]).data;
+  const auto [l0, o0] = Lambda.value;
+  const auto [l1, o1] = l0(is[0]).value;
+  const auto [l2, o2] = l1(is[1]).value;
+  const auto [l3, o3] = l2(is[2]).value;
+  const auto [l4, o4] = l3(is[3]).value;
+  const auto [l5, o5] = l4(is[4]).value;
+  const auto [l6, o6] = l5(is[5]).value;
+  const auto [l7, o7] = l6(is[6]).value;
+  const auto [l8, o8] = l7(is[7]).value;
+  const auto [l9, o9] = l8(is[8]).value;
+  const auto [l10, o10] = l9(is[9]).value;
   return {o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10};
 }
 
-std::vector<O> stdlib_cpp(const std::vector<I>& is, std::function<C(C, I)> f,
-                          std::function<O(C)> r) {
+auto stdlib_cpp(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
+    -> std::vector<O> {
   std::vector<int> output(is.size());
   std::inclusive_scan(cbegin(is), cend(is), begin(output), f, 0);
   std::transform(cbegin(output), cend(output), begin(output), r);
@@ -96,8 +97,8 @@ std::vector<O> stdlib_cpp(const std::vector<I>& is, std::function<C(C, I)> f,
   return output;
 }
 
-std::vector<O> rxcpp_scan(const std::vector<I>& is, std::function<C(C, I)> f,
-                          std::function<O(C)> r) {
+auto rxcpp_scan(const std::vector<I>& is, TransitionMap f, ReadoutMap r)
+    -> std::vector<O> {
   auto oi = rxcpp::observable<>::create<I>([&](rxcpp::subscriber<I> s) {
     for (auto each : is) s.on_next(each);
     s.on_completed();
@@ -110,9 +111,8 @@ std::vector<O> rxcpp_scan(const std::vector<I>& is, std::function<C(C, I)> f,
   return output;
 }
 
-std::vector<O> range_exclusive_scan(const std::vector<I>& is,
-                                    std::function<C(C, I)> f,
-                                    std::function<O(C)> r) {
+auto range_exclusive_scan(const std::vector<I>& is, TransitionMap f,
+                          ReadoutMap r) -> std::vector<O> {
   using namespace ranges;
   const auto us = is | views::exclusive_scan(0, f) | views::transform(r);
 
@@ -133,8 +133,8 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
 int main() {
   const std::vector<I> is = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  constexpr auto f = [](C c, I x) -> C { return c + x; };
-  constexpr auto r = [](C c) -> O { return c; };
+  constexpr auto f = [](S c, I x) -> S { return c + x; };
+  constexpr auto r = [](S c) -> O { return c; };
 
   // clang-format off
   std::cout <<
