@@ -10,4 +10,6 @@ message("CXX Standard : ${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# find_package(Boost 1.58 COMPONENTS variant REQUIRED)
+
 add_executable(mealy-demo src/mealy-fp.cpp)
