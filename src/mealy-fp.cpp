@@ -29,9 +29,11 @@ using TransitionMap = std::function<State(State, Input)>;
 using ReadoutMap = std::function<Output(State)>;
 
 // Moore as σ                                                               {{{1
+// M<S> = (I → S, O)
 template <typename S>
 using M = std::pair<std::function<S(Input)>, Output>;
 
+// MCoalg = s → M<S> = S → ( I → S, O);
 template <typename S>
 struct MCoalg {
   TransitionMap tmap;
@@ -41,6 +43,7 @@ struct MCoalg {
   }
 };
 
+// Λ ≅ M<Λ> = (I → Λ, O) = (I → (I → (I → (⋯, O), O), O), O)
 template <typename S>
 struct Lambda {
   MCoalg<S> sigma;
@@ -52,6 +55,11 @@ struct Lambda {
   }
 };
 
+//         M<𝑓>
+//    M<A> ────🢒 M<B>
+//
+//     A ───────🢒 Λ
+//          𝑓
 template <typename A, typename B>
 auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
   return [f](const M<A> ma) -> M<B> {
