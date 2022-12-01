@@ -33,7 +33,7 @@ template <typename S>
 using M = std::pair<std::function<S(Input)>, Output>;
 
 template <typename S>
-struct Sigma {
+struct MCoalg {
   TransitionMap tmap;
   ReadoutMap rout;
   auto operator()(S s) const -> M<S> {
@@ -43,12 +43,12 @@ struct Sigma {
 
 template <typename S>
 struct Lambda {
-  Sigma<S> sig;
+  MCoalg<S> sigma;
   M<Lambda> value;
 
-  Lambda(Sigma<S> sig_, S s) : sig{sig_} {
-    value = {[this, s](Input i) { return Lambda(sig, sig.tmap(s, i)); },
-             sig.rout(s)};
+  Lambda(MCoalg<S> sig_, S s) : sigma{sig_} {
+    value = {[this, s](Input i) { return Lambda(sigma, sigma.tmap(s, i)); },
+             sigma.rout(s)};
   }
 };
 
@@ -91,7 +91,7 @@ auto fixpoint_coalg(const std::vector<Input>& is, TransitionMap f,
                         ReadoutMap r) -> std::vector<Output> {
   const State s0 = 0;
 
-  const auto [l0, o0] = Lambda{Sigma<State>{f, r}, s0}.value;
+  const auto [l0, o0] = Lambda{MCoalg<State>{f, r}, s0}.value;
   const auto [l1, o1] = l0(is[0]).value;
   const auto [l2, o2] = l1(is[1]).value;
   const auto [l3, o3] = l2(is[2]).value;
