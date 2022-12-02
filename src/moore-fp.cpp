@@ -41,9 +41,7 @@ using MCoalg = std::function<M<S>(S)>;
 // Λ ≅ M<Λ> = (I ⊸ Λ, O) = (I ⊸ (I ⊸ (I ⊸ (⋯, O), O), O), O)
 template <typename S>
 struct Lambda : M<Lambda<S>> {
-  const MCoalg<S> sigma;
-
-  Lambda(MCoalg<S> sig, S s0) : sigma{sig} {
+  Lambda(MCoalg<S> sig, S s0) {
     const M<S> ms = sig(s0);
     // .first and .second come from std::pair parentage:
     this->first = [=](Input i) { return Lambda(sig, ms.first(i)); };
