@@ -38,7 +38,7 @@ using M = std::pair<std::function<S(Input)>, Output>;
 template <typename S>
 using MCoalg = std::function<M<S>(S)>;
 
-// Λ ≅ M<Λ> = (I ⊸ Λ, O) = (I ⊸ (I ⊸ (I ⊸ (⋯, O), O), O), O)
+// Λ ≅ M<Λ> = (I ⊸ Λ, O) = (I ⊸ (I ⊸ (I ⊸ (⋯), O), O), O), O)
 template <typename S>
 struct Lambda : M<Lambda<S>> {
   Lambda(MCoalg<S> sig, S s0) {
