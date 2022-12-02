@@ -153,6 +153,7 @@ auto range_exclusive_scan(const std::vector<Input>& is, TransitionMap f,
 }
 //                                                                          }}}1
 
+// main()                                                                   {{{1
 int main() {
   const std::vector<Input> is = {0, 1, 2, 3, 4};
 
@@ -178,3 +179,4 @@ int main() {
             << " ← exclusive_scan drops last value." << std::endl;
   // clang-format on
 }
+//                                                                          }}}1
