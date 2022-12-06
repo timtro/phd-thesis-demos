@@ -28,6 +28,13 @@ using Input = int;
 using TransitionMap = std::function<State(State, Input)>;
 using ReadoutMap = std::function<Output(State)>;
 
+template <typename I, typename S, typename O>
+struct MooreMachine {
+  S s0;
+  std::function<S(S, I)> tmap;
+  std::function<O(S)> rmap;
+};
+
 // Moore Coalgebra tooling                                                  {{{1
 
 // M<S> = (I ⊸ S, O)
@@ -85,40 +92,63 @@ auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
 }
 //                                                                          }}}1
 
-// list_by_hand(…)                                                          {{{1
-auto list_by_hand(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+// moore_machine_...(…)                                                     {{{1
+auto moore_machine_explicit(std::vector<Input> is,
+                            MooreMachine<Input, State, Output> mm)
     -> std::vector<Output> {
-  return {r(0),
-          r(f(0, is[0])),
-          r(f(f(0, is[0]), is[1])),
-          r(f(f(f(0, is[0]), is[1]), is[2])),
-          r(f(f(f(f(0, is[0]), is[1]), is[2]), is[3])),
-          r(f(f(f(f(f(0, is[0]), is[1]), is[2]), is[3]), is[4]))};
+  const auto [s0, f, r] = mm;
+  return {r(s0),
+          r(f(s0, is[0])),
+          r(f(f(s0, is[0]), is[1])),
+          r(f(f(f(s0, is[0]), is[1]), is[2])),
+          r(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3])),
+          r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))};
+}
+
+auto moore_machine_loop(const std::vector<Input>& is,
+                        MooreMachine<Input, State, Output> mm)
+    -> std::vector<Output> {
+  std::vector<int> output(is.size());
+  const auto [s0, f, r] = mm;
+
+  State current_state = s0;
+  output.push_back(r(s0));
+  for (const auto& i : is) {
+    current_state = f(current_state, i);
+    output.push_back(r(current_state));
+  }
+
+  return output;
 }
 //                                                                          }}}1
 // Using Moore fixpoint                                                     {{{1
-auto fixpoint_coalg(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+auto fixpoint_coalg(const std::vector<Input>& is, MooreMachine<Input, State, Output> mm)
     -> std::vector<Output> {
-  const State s0 = 0;
+  const auto s0 = mm.s0;
+  const auto f = mm.tmap;
+  const auto r = mm.rmap;
+
+  std::vector<int> output(is.size());
+
   const MCoalg<State> sigma = [f, r](State s) -> M<State> {
     return {[s, f, r](Input i) { return f(s, i); }, r(s)};
   };
-  std::vector<int> output(is.size());
 
   const auto lambda = Lambda(sigma, s0);
   const auto [l0, o0] = lambda;
-  const auto [l1, o1]   = l0(is[0]);
-  const auto [l2, o2]   = l1(is[1]);
-  const auto [l3, o3]   = l2(is[2]);
-  const auto [l4, o4]   = l3(is[3]);
-  const auto [l5, o5]   = l4(is[4]);
+  const auto [l1, o1] = l0(is[0]);
+  const auto [l2, o2] = l1(is[1]);
+  const auto [l3, o3] = l2(is[2]);
+  const auto [l4, o4] = l3(is[3]);
+  const auto [l5, o5] = l4(is[4]);
 
   return {o0, o1, o2, o3, o4, o5};
 }
 //                                                                          }}}1
 // stdlib_cpp                                                               {{{1
-auto stdlib_cpp(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+auto stdlib_cpp(const std::vector<Input>& is, MooreMachine<Input, State, Output> mm)
     -> std::vector<Output> {
+  const auto [s0, f, r] = mm;
   std::vector<int> output(is.size());
   std::inclusive_scan(cbegin(is), cend(is), begin(output), f, 0);
   std::transform(cbegin(output), cend(output), begin(output), r);
@@ -127,8 +157,9 @@ auto stdlib_cpp(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
 }
 //                                                                          }}}1
 // rxcpp_scan                                                               {{{1
-auto rxcpp_scan(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
+auto rxcpp_scan(const std::vector<Input>& is, MooreMachine<Input, State, Output> mm)
     -> std::vector<Output> {
+  const auto [s0, f, r] = mm;
   auto oi = rxcpp::observable<>::create<Input>([&](rxcpp::subscriber<Input> s) {
     for (auto each : is) s.on_next(each);
     s.on_completed();
@@ -142,8 +173,9 @@ auto rxcpp_scan(const std::vector<Input>& is, TransitionMap f, ReadoutMap r)
 }
 //                                                                          }}}1
 // range_exclusive_scan                                                     {{{1
-auto range_exclusive_scan(const std::vector<Input>& is, TransitionMap f,
-                          ReadoutMap r) -> std::vector<Output> {
+auto range_exclusive_scan(const std::vector<Input>& is, MooreMachine<Input, State, Output> mm) -> std::vector<Output> {
+  const auto [s0, f, r] = mm;
+
   using namespace ranges;
   const auto us = is | views::exclusive_scan(0, f) | views::transform(r);
 
@@ -153,28 +185,32 @@ auto range_exclusive_scan(const std::vector<Input>& is, TransitionMap f,
 
 // main()                                                                   {{{1
 int main() {
-  const std::vector<Input> is = {0, 1, 2, 3, 4};
+  std::vector<Input> is = {0, 1, 2, 3, 4};
+  State s0 = 0;
+  TransitionMap f = [](State c, Input x) -> State { return c + x; };
+  ReadoutMap r = [](State c) -> Output { return c; };
 
-  constexpr auto f = [](State c, Input x) -> State { return c + x; };
-  constexpr auto r = [](State c) -> Output { return c; };
+  MooreMachine<Input, State, Output> mm = {s0, f, r};
 
   // clang-format off
-  std::cout <<
-    "by_hand_as_list      = " << list_by_hand(is, f, r)
-      << std::endl;
-
-  std::cout <<
-    "fixpoint_coalg       = " << fixpoint_coalg(is, f, r) 
-      << std::endl;
-
-  std::cout << "rxcpp_scan           = " << rxcpp_scan(is, f, r)
-            << " ← rxcpp’s scan drops initial value." << std::endl;
-
-  std::cout << "lib_cpp              = " << stdlib_cpp(is, f, r)
-            << " ← std::inclusive_scan drops initial value." << std::endl;
-
-  std::cout << "range_exclusive_scan = " << range_exclusive_scan(is, f, r)
-            << " ← exclusive_scan drops last value." << std::endl;
+  std::cout << "moore_machine_explicit = "
+            << moore_machine_explicit(is, mm)
+            << std::endl
+            << "fixpoint_coalg         = "
+            << fixpoint_coalg(is, mm) 
+            << std::endl
+            << "rxcpp_scan             = "
+            << rxcpp_scan(is, mm)
+            << " ← rxcpp’s scan drops initial value."
+            << std::endl
+            << "lib_cpp                = "
+            << stdlib_cpp(is, mm)
+            << " ← std::inclusive_scan drops initial value."
+            << std::endl
+            << "range_exclusive_scan   = "
+            << range_exclusive_scan(is, mm)
+            << " ← exclusive_scan drops last value."\
+            << std::endl;
   // clang-format on
 }
 //                                                                          }}}1
