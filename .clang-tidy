@@ -1,6 +1,6 @@
 Checks: >
   modernize-*,
-  performance-*,
+  # performance-*,
   portability-*,
   readability-*,
 
