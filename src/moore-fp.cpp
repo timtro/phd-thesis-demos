@@ -39,10 +39,12 @@ template <typename S>
 using M = std::pair<std::function<S(Input)>, Output>;
 
 // MCoalg = S → M<S> = S → ( I ⊸ S, O);
-template <typename S> using MCoalg = std::function<M<S>(S)>;
+template <typename S>
+using MCoalg = std::function<M<S>(S)>;
 
 // Λ ≅ M<Λ> = (I ⊸ Λ, O) = (I ⊸ (I ⊸ (I ⊸ (⋯), O), O), O), O)
-template <typename S> struct Lambda : M<Lambda<S>> {
+template <typename S>
+struct Lambda : M<Lambda<S>> {
   Lambda(MCoalg<S> sigma, S s0) {
     const M<S> ms = sigma(s0);
     // .first and .second come from std::pair parentage:
@@ -53,15 +55,18 @@ template <typename S> struct Lambda : M<Lambda<S>> {
   }
 };
 
-template <typename S> struct std::tuple_size<Lambda<S>> {
+template <typename S>
+struct std::tuple_size<Lambda<S>> {
   static constexpr std::size_t value = 2;
 };
 
-template <typename S> struct std::tuple_element<0, Lambda<S>> {
+template <typename S>
+struct std::tuple_element<0, Lambda<S>> {
   using type = std::function<Lambda<S>(Input)>;
 };
 
-template <typename S> struct std::tuple_element<1, Lambda<S>> {
+template <typename S>
+struct std::tuple_element<1, Lambda<S>> {
   using type = Output;
 };
 
@@ -98,7 +103,8 @@ auto moore_machine_explicit(std::vector<Input> is,
       r(f(f(s0, is[0]), is[1])),
       r(f(f(f(s0, is[0]), is[1]), is[2])),
       r(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3])),
-      r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))};
+      r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))
+  };
 }
 // clang-format on
 
@@ -143,7 +149,8 @@ auto moore_lambda_explicit(const std::vector<Input> &is,
 }
 
 // unfold : ( (A → optional<pair<A, B>>), A ) → vector<B>
-template <typename F, typename A> auto unfold(F f, A a0) {
+template <typename F, typename A>
+auto unfold(F f, A a0) {
   // will fail if `f` doesn't return a pair when given an A.
   using B =
       decltype(std::declval<std::invoke_result_t<F, A>>()
