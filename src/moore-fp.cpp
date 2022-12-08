@@ -145,6 +145,71 @@ auto moore_lambda_explicit(const std::vector<Input> &is,
 
   return {o0, o1, o2, o3, o4, o5};
 }
+
+// unfold : ( (A → optional<pair<A, B>>), A ) → vector<B>
+template <typename F, typename A>
+auto unfold(F f, A a0) {
+  // will fail if `f` doesn't return a pair when given an A.
+  using B = decltype(std::declval<std::invoke_result_t<F, A>>()
+                         ->second);
+  static_assert(std::is_same_v<std::invoke_result_t<F, A>,
+                               std::optional<std::pair<A, B>>>);
+
+  std::vector<B> bs;
+
+  auto result_ab = f(a0);
+  if (result_ab)
+    bs.push_back(result_ab->second);
+  else
+    return bs;
+
+  while (true) {
+    result_ab = f(std::move(result_ab->first));
+    if (result_ab)
+      bs.push_back(result_ab->second);
+    else
+      return bs;
+  }
+}
+
+template <typename X>
+using P_O = std::optional<std::pair<X, Output>>;
+
+template <typename T>
+auto maybe_head_and_tail(std::vector<T> ts)
+    -> std::optional<std::pair<T, std::vector<T>>> {
+  if (ts.empty())
+    return std::nullopt;
+
+  const T head = ts[0];
+  ts.erase(std::begin(ts));
+  return {{head, ts}};
+}
+
+auto moore_lambda_listana(const std::vector<Input> &is,
+                          MooreMachine<Input, State, Output> mm)
+    -> std::vector<Output> {
+
+  using LxI = std::pair<Lambda<State>, std::vector<Input>>;
+
+  auto rho = [](LxI lambda_and_inputs) -> P_O<LxI> {
+    auto [l, is] = lambda_and_inputs;
+    auto opt_head_tail = maybe_head_and_tail(is);
+
+    if (!opt_head_tail)
+      return std::nullopt;
+
+    auto [head, tail] = *opt_head_tail;
+    return { {{l.first(head), tail}, l.second} };
+  };
+
+  MCoalg<State> sigma = [f = mm.tmap,
+                         r = mm.rmap](State s) -> M<State> {
+    return {[s, f, r](Input i) { return f(s, i); }, r(s)};
+  };
+
+  return unfold(rho, std::pair{Lambda(sigma, mm.s0), is});
+}
 //                                                                          }}}1
 // stdlib_cpp {{{1
 auto stdlib_cpp(const std::vector<Input> &is,
@@ -206,6 +271,9 @@ int main() {
             << std::endl
             << "moore_lambda_explicit  = "
             << moore_lambda_explicit(is, mm) 
+            << std::endl
+            << "moore_lambda_listana   = "
+            << moore_lambda_listana(is, mm)
             << std::endl
             << "rxcpp_scan             = "
             << rxcpp_scan(is, mm)
