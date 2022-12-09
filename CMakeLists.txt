@@ -12,4 +12,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # find_package(Boost 1.58 COMPONENTS variant REQUIRED)
 
+add_library (CATCH src/catch.cpp)
+
 add_executable(moore-demo src/moore-fp.cpp)
+target_link_libraries(moore-demo CATCH)
