@@ -93,20 +93,21 @@ auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
 //                                                                          }}}1
 
 // moore_machine_...(…) {{{1
-// clang-format off
-auto moore_machine_explicit(std::vector<Input> is,
-  MooreMachine<Input, State, Output> mm) -> std::vector<Output> {
+auto moore_machine_explicit(
+    std::vector<Input> is, MooreMachine<Input, State, Output> mm)
+    -> std::vector<Output> {
   const auto [s0, f, r] = mm;
   return {
+      // clang-format off
       r(s0),
       r(f(s0, is[0])),
       r(f(f(s0, is[0]), is[1])),
       r(f(f(f(s0, is[0]), is[1]), is[2])),
       r(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3])),
       r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))
+      // clang-format on
   };
 }
-// clang-format on
 
 auto moore_machine_loop(const std::vector<Input> &is,
     MooreMachine<Input, State, Output> mm)
@@ -128,9 +129,9 @@ auto moore_machine_loop(const std::vector<Input> &is,
 auto moore_lambda_explicit(const std::vector<Input> &is,
     MooreMachine<Input, State, Output> mm)
     -> std::vector<Output> {
-  auto s0 = mm.s0;
-  auto f = mm.tmap;
-  auto r = mm.rmap;
+  auto s0 = mm.s0;   // Cannot capture structured
+  auto f = mm.tmap;  //   bindings in C++17
+  auto r = mm.rmap;  //   lambda-closures.
 
   std::vector<int> output(is.size());
 
