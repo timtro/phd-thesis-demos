@@ -80,6 +80,24 @@ auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
         [f, ma](auto x) { return f(ma.first(x)); }, ma.second};
   };
 }
+
+// Attempt to make cata that demonstrates problems with
+//  recursive types in the type system.
+//
+// MCoalg<State> sig = [](State s) -> M<State> {
+//   return {[s](Input i) { return s + i; }, s};
+// };
+//
+// template <typename S>
+// struct MAna {
+//   MCoalg<S> sigma = [](State s) -> M<State> {
+//     return {[s](Input i) { return s + i; }, s};
+//   };
+//
+//   decltype(auto) make(S s0) {
+//     return ktor(mmap(this->make)(this->sigma(s0)));
+//   }
+// };
 //                                                                          }}}1
 
 // moore_machine_...(…) {{{1
