@@ -1,3 +1,5 @@
+// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]
+
 #include <functional>
 #include <iostream>
 #include <numeric> // for inclusive_scan
@@ -15,15 +17,15 @@ using State = int;
 using Output = int;
 using Input = int;
 
-// Classical Moore Machine {{{1
+// Classical Moore Machine f[[[1
 template <typename I, typename S, typename O>
 struct MooreMachine {
   S s0;
   std::function<S(S, I)> tmap;
   std::function<O(S)> rmap;
 };
-//                                                                          }}}1
-// Moore Coalgebra {{{1
+//                                                                         f]]]1
+// Moore Coalgebra f[[[1
 
 // M<S> = (I ⊸ S, O)
 template <typename S>
@@ -81,8 +83,8 @@ auto get(const Lambda<S> &l) {
   else
     return l.second;
 }
-//                                                                          }}}1
-// List co/algebra stuff {{{1
+//                                                                         f]]]1
+// List co/algebra stuff f[[[1
 template <typename X>
 using P_O = std::optional<std::pair<X, Output>>;
 
@@ -123,8 +125,8 @@ auto unfold(F f, A a0) {
       return bs;
   }
 }
-//                                                                          }}}1
-// Utilities {{{1
+//                                                                         f]]]1
+// Utilities f[[[1
 template <typename T>
 auto drop_first(std::vector<T> ts) -> std::vector<T> {
   assert(!ts.empty());
@@ -138,7 +140,7 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
   ts.pop_back();
   return ts;
 }
-//                                                                          }}}1
+//                                                                         f]]]1
 
 TEST_CASE(
     "Given a MooreMachine where,\n"
