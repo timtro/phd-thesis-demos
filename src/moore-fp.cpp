@@ -144,19 +144,19 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
 
 TEST_CASE(
     "Given a MooreMachine where,\n"
-    "   S = O = I = uint\n"
+    "   S = O = I = int\n"
     "  s0 = 0\n"
-    "   f = (i, s) $↦$ ( i $↦$ s + i )\n"
+    "   f = (i, s) $↦$ s + i\n"
     "   r = s $↦$ s,\n"
     "which evolves as a running sum of input with state "
     "output, and given an input vector `is` and manually "
     "computed `running_sum`…") {
   State s0 = 0;
-  auto f = [](State c, Input i) -> State { return c + i; };
-  auto r = [](State c) -> Output { return c; };
+  auto f = [](State s, Input i) -> State { return s + i; };
+  auto r = [](State s) -> Output { return s; };
   MooreMachine<Input, State, Output> mm = {s0, f, r};
 
-  auto is = std::vector<Input>{0, 1, 2, 3, 4};
+  auto i = std::vector<Input>{0, 1, 2, 3, 4};
   // running_sum = $\set{r∘f(s_k,i_k)}_{k=0}^4$.
   auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
   //                                     $↑$
@@ -164,20 +164,20 @@ TEST_CASE(
 
   AND_GIVEN(
       "a function that explicitly demonstrates the "
-      "recursion generating a sequence of successive "
-      "output values.") {
+      "recursion of f while generating a sequence of "
+      "successive output values.") {
 
     auto manual_moore_machine =
-        [&is, &mm]() -> std::vector<Output> {
+        [&i, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
       return {
           // clang-format off
         r(s0),
-        r(f(s0, is[0])),
-        r(f(f(s0, is[0]), is[1])),
-        r(f(f(f(s0, is[0]), is[1]), is[2])),
-        r(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3])),
-        r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))
+        r(f(s0, i[0])),
+        r(f(f(s0, i[0]), i[1])),
+        r(f(f(f(s0, i[0]), i[1]), i[2])),
+        r(f(f(f(f(s0, i[0]), i[1]), i[2]), i[3])),
+        r(f(f(f(f(f(s0, i[0]), i[1]), i[2]), i[3]), i[4]))
           // clang-format on
       };
     };
@@ -193,23 +193,23 @@ TEST_CASE(
       "explicitly.") {
 
     auto moore_lambda_explicit =
-        [&is, &mm]() -> std::vector<Output> {
+        [&i, &mm]() -> std::vector<Output> {
       auto s0 = mm.s0;  // Cannot capture structured
       auto f = mm.tmap; //   bindings in C++17
       auto r = mm.rmap; //   lambda-closures.
 
-      std::vector<int> output(is.size());
+      std::vector<int> output(i.size());
 
       MCoalg<State> sigma = [f, r](State s) -> M<State> {
         return {[s, f, r](Input i) { return f(s, i); }, r(s)};
       };
 
       auto [l0, o0] = Lambda(sigma, s0);
-      auto [l1, o1] = l0(is[0]);
-      auto [l2, o2] = l1(is[1]);
-      auto [l3, o3] = l2(is[2]);
-      auto [l4, o4] = l3(is[3]);
-      auto [l5, o5] = l4(is[4]);
+      auto [l1, o1] = l0(i[0]);
+      auto [l2, o2] = l1(i[1]);
+      auto [l3, o3] = l2(i[2]);
+      auto [l4, o4] = l3(i[3]);
+      auto [l5, o5] = l4(i[4]);
 
       return {o0, o1, o2, o3, o4, o5};
     };
@@ -227,7 +227,7 @@ TEST_CASE(
       "to the output.") {
 
     auto moore_lambda_list_ana =
-        [&is, &mm]() -> std::vector<Output> {
+        [&i, &mm]() -> std::vector<Output> {
       using LxI = std::pair<Lambda<State>, std::vector<Input>>;
 
       auto rho = [](LxI lambda_and_inputs) -> P_O<LxI> {
@@ -246,7 +246,7 @@ TEST_CASE(
         return {[s, f, r](Input i) { return f(s, i); }, r(s)};
       };
 
-      return unfold(rho, std::pair{Lambda(sigma, mm.s0), is});
+      return unfold(rho, std::pair{Lambda(sigma, mm.s0), i});
     };
 
     THEN("the function should return a running sum including "
@@ -261,11 +261,11 @@ TEST_CASE(
       "accumulate with f and then map r over the "
       "result.") {
 
-    auto rxcpp_scan = [&is, &mm]() -> std::vector<Output> {
+    auto rxcpp_scan = [&i, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
       auto oi = rxcpp::observable<>::create<
           Input>([&](rxcpp::subscriber<Input> s) {
-        for (auto each : is)
+        for (auto each : i)
           s.on_next(each);
         s.on_completed();
       });
@@ -288,11 +288,11 @@ TEST_CASE(
       "state using f, and std::transform to map state to "
       "output.") {
 
-    auto std_transform = [&is, &mm]() -> std::vector<Output> {
+    auto std_transform = [&i, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
-      std::vector<int> output(is.size());
+      std::vector<int> output(i.size());
       std::inclusive_scan(
-          cbegin(is), cend(is), begin(output), f, 0);
+          cbegin(i), cend(i), begin(output), f, 0);
       std::transform(
           cbegin(output), cend(output), begin(output), r);
 
@@ -311,12 +311,12 @@ TEST_CASE(
       "views::transform to map state to output.") {
 
     auto range_exclusive_scan =
-        [&is, &mm]() -> std::vector<Output> {
+        [&i, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
 
       using namespace ranges;
       const auto us =
-          is | views::exclusive_scan(0, f) | views::transform(r);
+          i | views::exclusive_scan(0, f) | views::transform(r);
 
       return std::vector(std::cbegin(us), std::cend(us));
     };
