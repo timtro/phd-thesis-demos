@@ -282,49 +282,51 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
   return ts;
 }
 
-SCENARIO(
-    "Given a MooreMachine which keeps (as state) and "
-    "produces (as output) a running sum of input "
-    "integers") {
+TEST_CASE(
+    "Given a MooreMachine where,\n"
+    "   S = O = I = uint\n"
+    "  s0 = 0\n"
+    "   f = (i, s) |-> ( i |-> s + i )\n"
+    "   r = i |-> i,\n"
+    "which evolves as a running sum of input with state "
+    "output, and given an input vector `is` and manually "
+    "computed `running_sum`…") {
   State s0 = 0;
   auto f = [](State c, Input i) -> State { return c + i; };
   auto r = [](State c) -> Output { return c; };
   MooreMachine<Input, State, Output> mm = {s0, f, r};
 
-  const auto running_sum = std::vector{0, 0, 1, 3, 6, 10};
-  //                                   ↑
-  //                            Initial state
+  auto is = std::vector<Input>{0, 1, 2, 3, 4};
+  auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
+  //                                     ↑
+  //                              Initial state
 
-  AND_GIVEN("A an input vector {0, 1, 2, 3, 4}") {
-    std::vector<Input> is = {0, 1, 2, 3, 4};
+  THEN("The “very explicit” use of the classical MooreMachine "
+       "should produce the running sum of the input vector.") {
+    REQUIRE(moore_machine_explicit(is, mm) == running_sum);
+  }
 
-    THEN("The “very explicit” use of the classical MooreMachine "
-         "should produce the running sum of the input vector.") {
-      REQUIRE(moore_machine_explicit(is, mm) == running_sum);
-    }
+  THEN("Explicitly handling a Lambda object constructed from "
+       "the MooreMachine should also compute a running sum.") {
+    REQUIRE(moore_lambda_explicit(is, mm) == running_sum);
+  }
 
-    THEN("Explicitly handling a Lambda object constructed from "
-         "the MooreMachine should also compute a running sum.") {
-      REQUIRE(moore_lambda_explicit(is, mm) == running_sum);
-    }
+  THEN("moore_lambda_listana, drops the last.") {
+    REQUIRE(
+        moore_lambda_listana(is, mm) == drop_last(running_sum));
+  }
 
-    THEN("moore_lambda_listana, drops the last.") {
-      REQUIRE(moore_lambda_listana(is, mm) ==
-              drop_last(running_sum));
-    }
+  THEN("rxcpp_scan, RxC++’s scan drops initial value.") {
+    REQUIRE(rxcpp_scan(is, mm) == drop_first(running_sum));
+  }
 
-    THEN("rxcpp_scan, RxC++’s scan drops initial value.") {
-      REQUIRE(rxcpp_scan(is, mm) == drop_first(running_sum));
-    }
+  THEN("stdlib_cpp std::inclusive_scan drops initial value.") {
+    REQUIRE(stdlib_cpp(is, mm) == drop_first(running_sum));
+  }
 
-    THEN("stdlib_cpp std::inclusive_scan drops initial value.") {
-      REQUIRE(stdlib_cpp(is, mm) == drop_first(running_sum));
-    }
-
-    THEN("range_exclusive_scan, range-v3 exclusive_scan drops "
-         "last value.") {
-      REQUIRE(range_exclusive_scan(is, mm) ==
-              drop_last(running_sum));
-    }
+  THEN("range_exclusive_scan, range-v3 exclusive_scan drops "
+       "last value.") {
+    REQUIRE(
+        range_exclusive_scan(is, mm) == drop_last(running_sum));
   }
 }
