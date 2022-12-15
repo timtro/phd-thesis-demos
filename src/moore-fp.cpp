@@ -15,18 +15,32 @@ using State = int;
 using Output = int;
 using Input = int;
 
+// Classical Moore Machine {{{1
 template <typename I, typename S, typename O>
 struct MooreMachine {
   S s0;
   std::function<S(S, I)> tmap;
   std::function<O(S)> rmap;
 };
-
-// Moore Coalgebra tooling {{{1
+//                                                                          }}}1
+// Moore Coalgebra {{{1
 
 // M<S> = (I ⊸ S, O)
 template <typename S>
 using M = std::pair<std::function<S(Input)>, Output>;
+
+//         M<𝑓>
+//    M<A> ────🢒 M<B>
+//
+//     A ───────🢒 Λ
+//          𝑓
+template <typename A, typename B>
+auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
+  return [f](const M<A> ma) -> M<B> {
+    return {
+        [f, ma](auto x) { return f(ma.first(x)); }, ma.second};
+  };
+}
 
 // MCoalg = S → M<S> = S → ( I ⊸ S, O);
 template <typename S>
@@ -67,94 +81,20 @@ auto get(const Lambda<S> &l) {
   else
     return l.second;
 }
-
-//         M<𝑓>
-//    M<A> ────🢒 M<B>
-//
-//     A ───────🢒 Λ
-//          𝑓
-template <typename A, typename B>
-auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
-  return [f](const M<A> ma) -> M<B> {
-    return {
-        [f, ma](auto x) { return f(ma.first(x)); }, ma.second};
-  };
-}
-
-// Attempt to make cata that demonstrates problems with
-//  recursive types in the type system.
-//
-// MCoalg<State> sig = [](State s) -> M<State> {
-//   return {[s](Input i) { return s + i; }, s};
-// };
-//
-// template <typename S>
-// struct MAna {
-//   MCoalg<S> sigma = [](State s) -> M<State> {
-//     return {[s](Input i) { return s + i; }, s};
-//   };
-//
-//   decltype(auto) make(S s0) {
-//     return ktor(mmap(this->make)(this->sigma(s0)));
-//   }
-// };
 //                                                                          }}}1
+// List co/algebra stuff {{{1
+template <typename X>
+using P_O = std::optional<std::pair<X, Output>>;
 
-// moore_machine_...(…) {{{1
-auto moore_machine_explicit(
-    std::vector<Input> is, MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-  const auto [s0, f, r] = mm;
-  return {
-      // clang-format off
-      r(s0),
-      r(f(s0, is[0])),
-      r(f(f(s0, is[0]), is[1])),
-      r(f(f(f(s0, is[0]), is[1]), is[2])),
-      r(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3])),
-      r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))
-      // clang-format on
-  };
-}
+template <typename T>
+auto maybe_head_and_tail(std::vector<T> ts)
+    -> std::optional<std::pair<T, std::vector<T>>> {
+  if (ts.empty())
+    return std::nullopt;
 
-auto moore_machine_loop(const std::vector<Input> &is,
-    MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-  std::vector<int> output(is.size());
-  const auto [s0, f, r] = mm;
-
-  State current_state = s0;
-  output.push_back(r(s0));
-  for (const auto &i : is) {
-    current_state = f(current_state, i);
-    output.push_back(r(current_state));
-  }
-
-  return output;
-}
-//                                                                          }}}1
-// Using Moore fixpoint {{{1
-auto moore_lambda_explicit(const std::vector<Input> &is,
-    MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-  auto s0 = mm.s0;  // Cannot capture structured
-  auto f = mm.tmap; //   bindings in C++17
-  auto r = mm.rmap; //   lambda-closures.
-
-  std::vector<int> output(is.size());
-
-  MCoalg<State> sigma = [f, r](State s) -> M<State> {
-    return {[s, f, r](Input i) { return f(s, i); }, r(s)};
-  };
-
-  auto [l0, o0] = Lambda(sigma, s0);
-  auto [l1, o1] = l0(is[0]);
-  auto [l2, o2] = l1(is[1]);
-  auto [l3, o3] = l2(is[2]);
-  auto [l4, o4] = l3(is[3]);
-  auto [l5, o5] = l4(is[4]);
-
-  return {o0, o1, o2, o3, o4, o5};
+  const T head = ts[0];
+  ts.erase(std::begin(ts));
+  return {{head, ts}};
 }
 
 // unfold : ( (A → optional<pair<A, B>>), A ) → vector<B>
@@ -183,91 +123,8 @@ auto unfold(F f, A a0) {
       return bs;
   }
 }
-
-template <typename X>
-using P_O = std::optional<std::pair<X, Output>>;
-
-template <typename T>
-auto maybe_head_and_tail(std::vector<T> ts)
-    -> std::optional<std::pair<T, std::vector<T>>> {
-  if (ts.empty())
-    return std::nullopt;
-
-  const T head = ts[0];
-  ts.erase(std::begin(ts));
-  return {{head, ts}};
-}
-
-auto moore_lambda_listana(const std::vector<Input> &is,
-    MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-
-  using LxI = std::pair<Lambda<State>, std::vector<Input>>;
-
-  auto rho = [](LxI lambda_and_inputs) -> P_O<LxI> {
-    auto [l, is] = lambda_and_inputs;
-    auto opt_head_tail = maybe_head_and_tail(is);
-
-    if (!opt_head_tail)
-      return std::nullopt;
-
-    auto [head, tail] = *opt_head_tail;
-    return {{{l.first(head), tail}, l.second}};
-  };
-
-  MCoalg<State> sigma =
-      [f = mm.tmap, r = mm.rmap](State s) -> M<State> {
-    return {[s, f, r](Input i) { return f(s, i); }, r(s)};
-  };
-
-  return unfold(rho, std::pair{Lambda(sigma, mm.s0), is});
-}
 //                                                                          }}}1
-// stdlib_cpp {{{1
-auto stdlib_cpp(const std::vector<Input> &is,
-    MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-  const auto [s0, f, r] = mm;
-  std::vector<int> output(is.size());
-  std::inclusive_scan(cbegin(is), cend(is), begin(output), f, 0);
-  std::transform(cbegin(output), cend(output), begin(output), r);
-
-  return output;
-}
-//                                                                          }}}1
-// rxcpp_scan {{{1
-auto rxcpp_scan(const std::vector<Input> &is,
-    MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-  const auto [s0, f, r] = mm;
-  auto oi = rxcpp::observable<>::create<
-      Input>([&](rxcpp::subscriber<Input> s) {
-    for (auto each : is)
-      s.on_next(each);
-    s.on_completed();
-  });
-
-  std::vector<Output> output;
-  auto us = oi.scan(0, f).map(r);
-  us.subscribe([&output](Output v) { output.push_back(v); });
-
-  return output;
-}
-//                                                                          }}}1
-// range_exclusive_scan {{{1
-auto range_exclusive_scan(const std::vector<Input> &is,
-    MooreMachine<Input, State, Output> mm)
-    -> std::vector<Output> {
-  const auto [s0, f, r] = mm;
-
-  using namespace ranges;
-  const auto us =
-      is | views::exclusive_scan(0, f) | views::transform(r);
-
-  return std::vector(std::cbegin(us), std::cend(us));
-}
-//                                                                          }}}1
-
+// Utilities {{{1
 template <typename T>
 auto drop_first(std::vector<T> ts) -> std::vector<T> {
   assert(!ts.empty());
@@ -281,13 +138,14 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
   ts.pop_back();
   return ts;
 }
+//                                                                          }}}1
 
 TEST_CASE(
     "Given a MooreMachine where,\n"
     "   S = O = I = uint\n"
     "  s0 = 0\n"
-    "   f = (i, s) |-> ( i |-> s + i )\n"
-    "   r = i |-> i,\n"
+    "   f = (i, s) $↦$ ( i $↦$ s + i )\n"
+    "   r = s $↦$ s,\n"
     "which evolves as a running sum of input with state "
     "output, and given an input vector `is` and manually "
     "computed `running_sum`…") {
@@ -297,36 +155,174 @@ TEST_CASE(
   MooreMachine<Input, State, Output> mm = {s0, f, r};
 
   auto is = std::vector<Input>{0, 1, 2, 3, 4};
+  // running_sum = $\set{r∘f(s_k,i_k)}_{k=0}^4$.
   auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
-  //                                     ↑
+  //                                     $↑$
   //                              Initial state
 
-  THEN("The “very explicit” use of the classical MooreMachine "
-       "should produce the running sum of the input vector.") {
-    REQUIRE(moore_machine_explicit(is, mm) == running_sum);
+  AND_GIVEN(
+      "a function that explicitly demonstrates the "
+      "recursion generating a sequence of successive "
+      "output values.") {
+
+    auto manual_moore_machine =
+        [&is, &mm]() -> std::vector<Output> {
+      const auto [s0, f, r] = mm;
+      return {
+          // clang-format off
+        r(s0),
+        r(f(s0, is[0])),
+        r(f(f(s0, is[0]), is[1])),
+        r(f(f(f(s0, is[0]), is[1]), is[2])),
+        r(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3])),
+        r(f(f(f(f(f(s0, is[0]), is[1]), is[2]), is[3]), is[4]))
+          // clang-format on
+      };
+    };
+
+    THEN("we should expect the running sum including the output "
+         "of the initial state.") {
+      REQUIRE(manual_moore_machine() == running_sum);
+    }
   }
 
-  THEN("Explicitly handling a Lambda object constructed from "
-       "the MooreMachine should also compute a running sum.") {
-    REQUIRE(moore_lambda_explicit(is, mm) == running_sum);
+  AND_GIVEN(
+      "a function that explicitly uses a $Λ$ value "
+      "explicitly.") {
+
+    auto moore_lambda_explicit =
+        [&is, &mm]() -> std::vector<Output> {
+      auto s0 = mm.s0;  // Cannot capture structured
+      auto f = mm.tmap; //   bindings in C++17
+      auto r = mm.rmap; //   lambda-closures.
+
+      std::vector<int> output(is.size());
+
+      MCoalg<State> sigma = [f, r](State s) -> M<State> {
+        return {[s, f, r](Input i) { return f(s, i); }, r(s)};
+      };
+
+      auto [l0, o0] = Lambda(sigma, s0);
+      auto [l1, o1] = l0(is[0]);
+      auto [l2, o2] = l1(is[1]);
+      auto [l3, o3] = l2(is[2]);
+      auto [l4, o4] = l3(is[3]);
+      auto [l5, o5] = l4(is[4]);
+
+      return {o0, o1, o2, o3, o4, o5};
+    };
+
+    THEN("we should expect the running sum including the output "
+         "of the initial state.") {
+
+      REQUIRE(moore_lambda_explicit() == running_sum);
+    }
   }
 
-  THEN("moore_lambda_listana, drops the last.") {
-    REQUIRE(
-        moore_lambda_listana(is, mm) == drop_last(running_sum));
+  AND_GIVEN(
+      "a function which combines the Lambda structure and "
+      "a $𝘗$-anamorphism to automatically map the input "
+      "to the output.") {
+
+    auto moore_lambda_list_ana =
+        [&is, &mm]() -> std::vector<Output> {
+      using LxI = std::pair<Lambda<State>, std::vector<Input>>;
+
+      auto rho = [](LxI lambda_and_inputs) -> P_O<LxI> {
+        auto [l, is] = lambda_and_inputs;
+        auto opt_head_tail = maybe_head_and_tail(is);
+
+        if (!opt_head_tail)
+          return std::nullopt;
+
+        auto [head, tail] = *opt_head_tail;
+        return {{{l.first(head), tail}, l.second}};
+      };
+
+      MCoalg<State> sigma =
+          [f = mm.tmap, r = mm.rmap](State s) -> M<State> {
+        return {[s, f, r](Input i) { return f(s, i); }, r(s)};
+      };
+
+      return unfold(rho, std::pair{Lambda(sigma, mm.s0), is});
+    };
+
+    THEN("the function should return a running sum including "
+         "the initial state but without the last output "
+         "value.") {
+      REQUIRE(moore_lambda_list_ana() == drop_last(running_sum));
+    }
   }
 
-  THEN("rxcpp_scan, RxC++’s scan drops initial value.") {
-    REQUIRE(rxcpp_scan(is, mm) == drop_first(running_sum));
+  AND_GIVEN(
+      "a function using the scan combinator from RxC++ to "
+      "accumulate with f and then map r over the "
+      "result.") {
+
+    auto rxcpp_scan = [&is, &mm]() -> std::vector<Output> {
+      const auto [s0, f, r] = mm;
+      auto oi = rxcpp::observable<>::create<
+          Input>([&](rxcpp::subscriber<Input> s) {
+        for (auto each : is)
+          s.on_next(each);
+        s.on_completed();
+      });
+
+      std::vector<Output> output;
+      auto us = oi.scan(0, f).map(r);
+      us.subscribe([&output](Output v) { output.push_back(v); });
+
+      return output;
+    };
+
+    THEN("expect a running sum without output from the initial "
+         "state.") {
+      REQUIRE(rxcpp_scan() == drop_first(running_sum));
+    }
   }
 
-  THEN("stdlib_cpp std::inclusive_scan drops initial value.") {
-    REQUIRE(stdlib_cpp(is, mm) == drop_first(running_sum));
+  AND_GIVEN(
+      "a function using std::inclusive_scan to accumulate "
+      "state using f, and std::transform to map state to "
+      "output.") {
+
+    auto std_transform = [&is, &mm]() -> std::vector<Output> {
+      const auto [s0, f, r] = mm;
+      std::vector<int> output(is.size());
+      std::inclusive_scan(
+          cbegin(is), cend(is), begin(output), f, 0);
+      std::transform(
+          cbegin(output), cend(output), begin(output), r);
+
+      return output;
+    };
+
+    THEN("expect a running sum without output from the initial "
+         "state.") {
+      REQUIRE(std_transform() == drop_first(running_sum));
+    }
   }
 
-  THEN("range_exclusive_scan, range-v3 exclusive_scan drops "
-       "last value.") {
-    REQUIRE(
-        range_exclusive_scan(is, mm) == drop_last(running_sum));
+  AND_GIVEN(
+      "a function using range-v3's views::exclusive_scan "
+      "combinator to accumulate state using f and then "
+      "views::transform to map state to output.") {
+
+    auto range_exclusive_scan =
+        [&is, &mm]() -> std::vector<Output> {
+      const auto [s0, f, r] = mm;
+
+      using namespace ranges;
+      const auto us =
+          is | views::exclusive_scan(0, f) | views::transform(r);
+
+      return std::vector(std::cbegin(us), std::cend(us));
+    };
+
+    THEN("the function should return a running sum including "
+         "the initial state but without the last output "
+         "value.") {
+      REQUIRE(range_exclusive_scan() == drop_last(running_sum));
+    }
   }
 }
