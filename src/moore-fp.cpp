@@ -148,16 +148,15 @@ TEST_CASE(
     "  s0 = 0\n"
     "   f = (i, s) $↦$ s + i\n"
     "   r = s $↦$ s,\n"
-    "which evolves as a running sum of input with state "
-    "output, and given an input vector `is` and manually "
-    "computed `running_sum`…") {
+    "and given an input vector `i` and manually computed "
+    "`running_sum`…") {
   State s0 = 0;
   auto f = [](State s, Input i) -> State { return s + i; };
   auto r = [](State s) -> Output { return s; };
   MooreMachine<Input, State, Output> mm = {s0, f, r};
 
   auto i = std::vector<Input>{0, 1, 2, 3, 4};
-  // running_sum = $\set{r∘f(s_k,i_k)}_{k=0}^4$.
+  // running_sum = $\set{s₀, r∘f(s_k,i_k)}_{k=0}^4$.
   auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
   //                                     $↑$
   //                              Initial state
