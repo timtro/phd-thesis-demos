@@ -84,9 +84,65 @@ auto get(const Lambda<S> &l) {
     return l.second;
 }
 //                                                                         f]]]1
+// Scanify solution stuff f[[[1
+template <typename T, typename U>
+using Pr = std::optional<std::pair<T, U>>;
+
+template <typename T, typename U>
+using PrAlgebra = std::function<T(Pr<T, U>)>;
+
+// scanify :: 𝘗ᵣAlgebra state value → 𝘗ᵣAlgebra (Snoc state)
+// value scanify alg (Pᵣ Nothing) = nil ⧺ alg (Pᵣ Nothing)
+// scanify alg (Pᵣ (Just ( accum , val))) = accum ⧺ alg (Pᵣ (Just
+// (s0, val)))
+//   where
+//     s0 = snocHead accum
+template <typename S, typename V>
+auto scanify(PrAlgebra<S, V> alg)
+    -> PrAlgebra<std::vector<S>, V> {
+  return [alg](Pr<std::vector<S>, V> p) -> std::vector<S> {
+    if (!p)
+      return std::vector{alg(std::nullopt)};
+
+    auto [accum, val] = *p;
+    auto s0 = accum.back();
+    accum.push_back(alg(Pr<S, V>{{s0, val}}));
+    return accum;
+  };
+}
+
+template <typename F>
+auto flip(const F f) {
+  return [f](auto a, auto b) { return f(b, a); };
+}
+
+template <typename F, typename T, typename C>
+T foldr(const F &f, const T &z, const C &c) {
+  return accumulate(crbegin(c), crend(c), z, flip(f));
+}
+
+// foldr f z []     = z
+// foldr f z (x:xs) = f x (foldr f z xs)
+template <typename S, typename V>
+auto prcata(PrAlgebra<S, V> alg, std::vector<V> vs) -> S {
+  auto s0 = alg(std::nullopt);
+
+  if (vs.empty())
+    return s0;
+
+  auto accumulator = s0;
+  for (auto &v : vs)
+    accumulator = alg({{accumulator, v}});
+
+  return accumulator;
+}
+// f]]]1
 // List co/algebra stuff f[[[1
+template <typename T, typename U>
+using PrCoalgebra = std::function<Pr<T, U>(T)>;
+
 template <typename X>
-using P_O = std::optional<std::pair<X, Output>>;
+using Pr_O = Pr<X, Output>;
 
 template <typename T>
 auto maybe_head_and_tail(std::vector<T> ts)
@@ -229,7 +285,7 @@ TEST_CASE(
         [&i, &mm]() -> std::vector<Output> {
       using LxI = std::pair<Lambda<State>, std::vector<Input>>;
 
-      auto rho = [](LxI lambda_and_inputs) -> P_O<LxI> {
+      auto rho = [](LxI lambda_and_inputs) -> Pr_O<LxI> {
         auto [l, is] = lambda_and_inputs;
         auto opt_head_tail = maybe_head_and_tail(is);
 
@@ -252,6 +308,28 @@ TEST_CASE(
          "the initial state but without the last output "
          "value.") {
       REQUIRE(moore_lambda_list_ana() == drop_last(running_sum));
+    }
+  }
+
+  AND_GIVEN("A 𝘗-algebra embodying f and s0") {
+    PrAlgebra<State, Input> alg =
+        [&mm](Pr<State, Input> p) -> State {
+      if (!p)
+        return mm.s0;
+
+      auto [s, i] = *p;
+      return mm.tmap(s, i);
+    };
+
+    THEN("The algebra catamorphised over the input list should "
+         "produce the sum") {
+      REQUIRE(prcata(alg, i) == running_sum.back());
+    }
+
+    THEN("The scanified version of that algebra should produce "
+         "a list (i.e., std::vector) of the running sum.") {
+      auto scanified_alg = scanify(alg);
+      REQUIRE(prcata(scanified_alg, i) == running_sum);
     }
   }
 
