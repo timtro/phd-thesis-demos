@@ -46,12 +46,12 @@ auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
 
 // MCoalg = S → M<S> = S → ( I ⊸ S, O);
 template <typename S>
-using MCoalg = std::function<M<S>(S)>;
+using MCoalgebra = std::function<M<S>(S)>;
 
 // Λ ≅ M<Λ> = (I ⊸ Λ, O) = (I ⊸ (I ⊸ (I ⊸ (⋯), O), O), O), O)
 template <typename S>
 struct Lambda : M<Lambda<S>> {
-  Lambda(MCoalg<S> sigma, S s0) {
+  Lambda(MCoalgebra<S> sigma, S s0) {
     const M<S> ms = sigma(s0);
     // .first and .second come from std::pair parentage:
     this->first = [=](Input i) {
@@ -124,7 +124,7 @@ T foldr(const F &f, const T &z, const C &c) {
 // foldr f z []     = z
 // foldr f z (x:xs) = f x (foldr f z xs)
 template <typename S, typename V>
-auto prcata(PrAlgebra<S, V> alg, std::vector<V> vs) -> S {
+auto pr_cata(PrAlgebra<S, V> alg, std::vector<V> vs) -> S {
   auto s0 = alg(std::nullopt);
 
   if (vs.empty())
@@ -155,30 +155,23 @@ auto maybe_head_and_tail(std::vector<T> ts)
   return {{head, ts}};
 }
 
-// unfold : ( (A → optional<pair<A, B>>), A ) → vector<B>
-template <typename F, typename A>
-auto unfold(F f, A a0) {
-  // will fail if `f` doesn't return a pair when given an A.
-  using B =
-      decltype(std::declval<std::invoke_result_t<F, A>>()
-                   ->second);
-  static_assert(std::is_same_v<std::invoke_result_t<F, A>,
-      std::optional<std::pair<A, B>>>);
+template<typename T, typename U>
+auto pr_ana(PrCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
+  std::vector<U> us;
 
-  std::vector<B> bs;
+  auto result_ab = coalg(seed);
 
-  auto result_ab = f(a0);
   if (result_ab)
-    bs.push_back(result_ab->second);
+    us.push_back(result_ab->second);
   else
-    return bs;
+    return us;
 
   while (true) {
-    result_ab = f(std::move(result_ab->first));
+    result_ab = coalg(std::move(result_ab->first));
     if (result_ab)
-      bs.push_back(result_ab->second);
+      us.push_back(result_ab->second);
     else
-      return bs;
+      return us;
   }
 }
 //                                                                         f]]]1
@@ -255,7 +248,7 @@ TEST_CASE(
 
       std::vector<int> output(i.size());
 
-      MCoalg<State> sigma = [f, r](State s) -> M<State> {
+      MCoalgebra<State> sigma = [f, r](State s) -> M<State> {
         return {[s, f, r](Input i) { return f(s, i); }, r(s)};
       };
 
@@ -285,7 +278,7 @@ TEST_CASE(
         [&i, &mm]() -> std::vector<Output> {
       using LxI = std::pair<Lambda<State>, std::vector<Input>>;
 
-      auto rho = [](LxI lambda_and_inputs) -> Pr_O<LxI> {
+      PrCoalgebra<LxI, Output> rho = [](LxI lambda_and_inputs) -> Pr_O<LxI> {
         auto [l, is] = lambda_and_inputs;
         auto opt_head_tail = maybe_head_and_tail(is);
 
@@ -296,12 +289,12 @@ TEST_CASE(
         return {{{l.first(head), tail}, l.second}};
       };
 
-      MCoalg<State> sigma =
+      MCoalgebra<State> sigma =
           [f = mm.tmap, r = mm.rmap](State s) -> M<State> {
         return {[s, f, r](Input i) { return f(s, i); }, r(s)};
       };
 
-      return unfold(rho, std::pair{Lambda(sigma, mm.s0), i});
+      return pr_ana(rho, std::pair{Lambda(sigma, mm.s0), i});
     };
 
     THEN("the function should return a running sum including "
@@ -323,13 +316,13 @@ TEST_CASE(
 
     THEN("The algebra catamorphised over the input list should "
          "produce the sum") {
-      REQUIRE(prcata(alg, i) == running_sum.back());
+      REQUIRE(pr_cata(alg, i) == running_sum.back());
     }
 
     THEN("The scanified version of that algebra should produce "
          "a list (i.e., std::vector) of the running sum.") {
       auto scanified_alg = scanify(alg);
-      REQUIRE(prcata(scanified_alg, i) == running_sum);
+      REQUIRE(pr_cata(scanified_alg, i) == running_sum);
     }
   }
 
