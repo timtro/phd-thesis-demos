@@ -155,7 +155,7 @@ auto maybe_head_and_tail(std::vector<T> ts)
   return {{head, ts}};
 }
 
-template<typename T, typename U>
+template <typename T, typename U>
 auto pr_ana(PrCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
   std::vector<U> us;
 
@@ -278,7 +278,8 @@ TEST_CASE(
         [&i, &mm]() -> std::vector<Output> {
       using LxI = std::pair<Lambda<State>, std::vector<Input>>;
 
-      PrCoalgebra<LxI, Output> rho = [](LxI lambda_and_inputs) -> Pr_O<LxI> {
+      PrCoalgebra<LxI, Output> rho_emit_init =
+          [](LxI lambda_and_inputs) -> Pr_O<LxI> {
         auto [l, is] = lambda_and_inputs;
         auto opt_head_tail = maybe_head_and_tail(is);
 
@@ -289,12 +290,27 @@ TEST_CASE(
         return {{{l.first(head), tail}, l.second}};
       };
 
+      PrCoalgebra<LxI, Output> rho_emit_curr =
+          [](LxI lambda_and_inputs) -> Pr_O<LxI> {
+        auto [l, is] = lambda_and_inputs;
+        auto opt_head_tail = maybe_head_and_tail(is);
+
+        if (!opt_head_tail)
+          return std::nullopt;
+
+        auto [head, tail] = *opt_head_tail;
+        auto next_lambda = l.first(head);
+
+        return {{{next_lambda, tail}, next_lambda.second}};
+      };
+
       MCoalgebra<State> sigma =
           [f = mm.tmap, r = mm.rmap](State s) -> M<State> {
         return {[s, f, r](Input i) { return f(s, i); }, r(s)};
       };
 
-      return pr_ana(rho, std::pair{Lambda(sigma, mm.s0), i});
+      return pr_ana(
+          rho_emit_init, std::pair{Lambda(sigma, mm.s0), i});
     };
 
     THEN("the function should return a running sum including "
