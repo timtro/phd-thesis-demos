@@ -110,32 +110,6 @@ auto moore_to_algebra(MooreMachine<I, S, O> mm)
   };
 }
 
-template <typename F>
-auto flip(const F f) {
-  return [f](auto a, auto b) { return f(b, a); };
-}
-
-template <typename F, typename T, typename C>
-T foldr(const F &f, const T &z, const C &c) {
-  return accumulate(crbegin(c), crend(c), z, flip(f));
-}
-
-// foldr f z []     = z
-// foldr f z (x:xs) = f x (foldr f z xs)
-template <typename S, typename I>
-auto cata(OPAlgebra<S, I> alg, std::vector<I> vs) -> S {
-  auto s0 = alg(std::nullopt);
-
-  if (vs.empty())
-    return s0;
-
-  auto accumulator = s0;
-  for (auto &v : vs)
-    accumulator = alg({{accumulator, v}});
-
-  return accumulator;
-}
-
 template <typename S, typename I>
 auto make_cata(OPAlgebra<S, I> alg)
     -> std::function<S(std::vector<I>)> {
@@ -273,7 +247,7 @@ TEST_CASE(
     }
   }
 
-  AND_GIVEN("A 𝘗*-algebra embodying $f$ and $s0$") {
+  AND_GIVEN("A $𝘗^*_I$-algebra embodying $f$ and $s0$") {
     OPAlgebra<State, Input> alg = moore_to_algebra(mm);
 
     THEN("The algebra catamorphised over the input list should "
@@ -285,8 +259,8 @@ TEST_CASE(
 
     THEN("The scanified version of that algebra should produce "
          "a list (i.e., std::vector) of the running sum.") {
-      auto scanified_alg = scanify(alg);
-      REQUIRE(cata(scanified_alg, i_s) == running_sum);
+      auto running_sumer = make_cata(scanify(alg));
+      REQUIRE(running_sumer(i_s) == running_sum);
     }
   }
 
