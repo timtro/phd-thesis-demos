@@ -85,11 +85,11 @@ auto get(const Lambda<S> &l) {
 }
 //                                                                         f]]]1
 // Scanify solution stuff f[[[1
-template <typename T, typename U>
-using Pr = std::optional<std::pair<T, U>>;
+template <typename S, typename I>
+using OP = std::optional<std::pair<S, I>>;
 
-template <typename T, typename U>
-using PrAlgebra = std::function<T(Pr<T, U>)>;
+template <typename S, typename I>
+using OPAlgebra = std::function<S(OP<S, I>)>;
 
 // scanify :: 𝘗ᵣAlgebra state value → 𝘗ᵣAlgebra (Snoc state)
 // value scanify alg (Pᵣ Nothing) = nil ⧺ alg (Pᵣ Nothing)
@@ -97,16 +97,16 @@ using PrAlgebra = std::function<T(Pr<T, U>)>;
 // (s0, val)))
 //   where
 //     s0 = snocHead accum
-template <typename S, typename V>
-auto scanify(PrAlgebra<S, V> alg)
-    -> PrAlgebra<std::vector<S>, V> {
-  return [alg](Pr<std::vector<S>, V> p) -> std::vector<S> {
-    if (!p)
+template <typename S, typename I>
+auto scanify(OPAlgebra<S, I> alg)
+    -> OPAlgebra<std::vector<S>, I> {
+  return [alg](OP<std::vector<S>, I> op) -> std::vector<S> {
+    if (!op)
       return std::vector{alg(std::nullopt)};
 
-    auto [accum, val] = *p;
+    auto [accum, val] = *op;
     auto s0 = accum.back();
-    accum.push_back(alg(Pr<S, V>{{s0, val}}));
+    accum.push_back(alg(OP<S, I>{{s0, val}}));
     return accum;
   };
 }
@@ -123,8 +123,8 @@ T foldr(const F &f, const T &z, const C &c) {
 
 // foldr f z []     = z
 // foldr f z (x:xs) = f x (foldr f z xs)
-template <typename S, typename V>
-auto pr_cata(PrAlgebra<S, V> alg, std::vector<V> vs) -> S {
+template <typename S, typename I>
+auto cata(OPAlgebra<S, I> alg, std::vector<I> vs) -> S {
   auto s0 = alg(std::nullopt);
 
   if (vs.empty())
@@ -139,10 +139,10 @@ auto pr_cata(PrAlgebra<S, V> alg, std::vector<V> vs) -> S {
 // f]]]1
 // List co/algebra stuff f[[[1
 template <typename T, typename U>
-using PrCoalgebra = std::function<Pr<T, U>(T)>;
+using OPCoalgebra = std::function<OP<T, U>(T)>;
 
 template <typename X>
-using Pr_O = Pr<X, Output>;
+using OP_O = OP<X, Output>;
 
 template <typename T>
 auto maybe_head_and_tail(std::vector<T> ts)
@@ -156,7 +156,7 @@ auto maybe_head_and_tail(std::vector<T> ts)
 }
 
 template <typename T, typename U>
-auto pr_ana(PrCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
+auto pr_ana(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
   std::vector<U> us;
 
   auto result_ab = coalg(seed);
@@ -197,14 +197,14 @@ TEST_CASE(
     "  s0 = 0\n"
     "   f = (i, s) $↦$ s + i\n"
     "   r = s $↦$ s,\n"
-    "and given an input vector `i` and manually computed "
+    "and given an input vector `i_s` and manually computed "
     "`running_sum`…") {
   State s0 = 0;
   auto f = [](State s, Input i) -> State { return s + i; };
   auto r = [](State s) -> Output { return s; };
   MooreMachine<Input, State, Output> mm = {s0, f, r};
 
-  auto i = std::vector<Input>{0, 1, 2, 3, 4};
+  auto i_s = std::vector<Input>{0, 1, 2, 3, 4};
   // running_sum = $\set{s₀, r∘f(s_k,i_k)}_{k=0}^4$.
   auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
   //                                     $↑$
@@ -216,16 +216,16 @@ TEST_CASE(
       "successive output values.") {
 
     auto manual_moore_machine =
-        [&i, &mm]() -> std::vector<Output> {
+        [&i_s, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
       return {
           // clang-format off
         r(s0),
-        r(f(s0, i[0])),
-        r(f(f(s0, i[0]), i[1])),
-        r(f(f(f(s0, i[0]), i[1]), i[2])),
-        r(f(f(f(f(s0, i[0]), i[1]), i[2]), i[3])),
-        r(f(f(f(f(f(s0, i[0]), i[1]), i[2]), i[3]), i[4]))
+        r(f(s0, i_s[0])),
+        r(f(f(s0, i_s[0]), i_s[1])),
+        r(f(f(f(s0, i_s[0]), i_s[1]), i_s[2])),
+        r(f(f(f(f(s0, i_s[0]), i_s[1]), i_s[2]), i_s[3])),
+        r(f(f(f(f(f(s0, i_s[0]), i_s[1]), i_s[2]), i_s[3]), i_s[4]))
           // clang-format on
       };
     };
@@ -241,23 +241,23 @@ TEST_CASE(
       "explicitly.") {
 
     auto moore_lambda_explicit =
-        [&i, &mm]() -> std::vector<Output> {
+        [&i_s, &mm]() -> std::vector<Output> {
       auto s0 = mm.s0;  // Cannot capture structured
       auto f = mm.tmap; //   bindings in C++17
       auto r = mm.rmap; //   lambda-closures.
 
-      std::vector<int> output(i.size());
+      std::vector<int> output(i_s.size());
 
       MCoalgebra<State> sigma = [f, r](State s) -> M<State> {
         return {[s, f, r](Input i) { return f(s, i); }, r(s)};
       };
 
       auto [l0, o0] = Lambda(sigma, s0);
-      auto [l1, o1] = l0(i[0]);
-      auto [l2, o2] = l1(i[1]);
-      auto [l3, o3] = l2(i[2]);
-      auto [l4, o4] = l3(i[3]);
-      auto [l5, o5] = l4(i[4]);
+      auto [l1, o1] = l0(i_s[0]);
+      auto [l2, o2] = l1(i_s[1]);
+      auto [l3, o3] = l2(i_s[2]);
+      auto [l4, o4] = l3(i_s[3]);
+      auto [l5, o5] = l4(i_s[4]);
 
       return {o0, o1, o2, o3, o4, o5};
     };
@@ -272,14 +272,14 @@ TEST_CASE(
   AND_GIVEN(
       "a function which combines the Lambda structure and "
       "a $𝘗$-anamorphism to automatically map the input "
-      "to the output.") {
+      "to the output, simulating inclusive scan.") {
 
     auto moore_lambda_list_ana =
-        [&i, &mm]() -> std::vector<Output> {
+        [&i_s, &mm]() -> std::vector<Output> {
       using LxI = std::pair<Lambda<State>, std::vector<Input>>;
 
-      PrCoalgebra<LxI, Output> rho_emit_init =
-          [](LxI lambda_and_inputs) -> Pr_O<LxI> {
+      OPCoalgebra<LxI, Output> rho_exclusive =
+          [](LxI lambda_and_inputs) -> OP_O<LxI> {
         auto [l, is] = lambda_and_inputs;
         auto opt_head_tail = maybe_head_and_tail(is);
 
@@ -290,8 +290,8 @@ TEST_CASE(
         return {{{l.first(head), tail}, l.second}};
       };
 
-      PrCoalgebra<LxI, Output> rho_emit_curr =
-          [](LxI lambda_and_inputs) -> Pr_O<LxI> {
+      OPCoalgebra<LxI, Output> rho_inclusive =
+          [](LxI lambda_and_inputs) -> OP_O<LxI> {
         auto [l, is] = lambda_and_inputs;
         auto opt_head_tail = maybe_head_and_tail(is);
 
@@ -310,19 +310,18 @@ TEST_CASE(
       };
 
       return pr_ana(
-          rho_emit_init, std::pair{Lambda(sigma, mm.s0), i});
+          rho_inclusive, std::pair{Lambda(sigma, mm.s0), i_s});
     };
 
     THEN("the function should return a running sum including "
-         "the initial state but without the last output "
-         "value.") {
-      REQUIRE(moore_lambda_list_ana() == drop_last(running_sum));
+         "the final state but without the initial.") {
+      REQUIRE(moore_lambda_list_ana() == drop_first(running_sum));
     }
   }
 
   AND_GIVEN("A 𝘗-algebra embodying f and s0") {
-    PrAlgebra<State, Input> alg =
-        [&mm](Pr<State, Input> p) -> State {
+    OPAlgebra<State, Input> alg =
+        [&mm](OP<State, Input> p) -> State {
       if (!p)
         return mm.s0;
 
@@ -332,13 +331,13 @@ TEST_CASE(
 
     THEN("The algebra catamorphised over the input list should "
          "produce the sum") {
-      REQUIRE(pr_cata(alg, i) == running_sum.back());
+      REQUIRE(cata(alg, i_s) == running_sum.back());
     }
 
     THEN("The scanified version of that algebra should produce "
          "a list (i.e., std::vector) of the running sum.") {
       auto scanified_alg = scanify(alg);
-      REQUIRE(pr_cata(scanified_alg, i) == running_sum);
+      REQUIRE(cata(scanified_alg, i_s) == running_sum);
     }
   }
 
@@ -347,11 +346,11 @@ TEST_CASE(
       "accumulate with f and then map r over the "
       "result.") {
 
-    auto rxcpp_scan = [&i, &mm]() -> std::vector<Output> {
+    auto rxcpp_scan = [&i_s, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
       auto oi = rxcpp::observable<>::create<
           Input>([&](rxcpp::subscriber<Input> s) {
-        for (auto each : i)
+        for (auto each : i_s)
           s.on_next(each);
         s.on_completed();
       });
@@ -374,11 +373,11 @@ TEST_CASE(
       "state using f, and std::transform to map state to "
       "output.") {
 
-    auto std_transform = [&i, &mm]() -> std::vector<Output> {
+    auto std_transform = [&i_s, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
-      std::vector<int> output(i.size());
+      std::vector<int> output(i_s.size());
       std::inclusive_scan(
-          cbegin(i), cend(i), begin(output), f, 0);
+          cbegin(i_s), cend(i_s), begin(output), f, 0);
       std::transform(
           cbegin(output), cend(output), begin(output), r);
 
@@ -397,12 +396,12 @@ TEST_CASE(
       "views::transform to map state to output.") {
 
     auto range_exclusive_scan =
-        [&i, &mm]() -> std::vector<Output> {
+        [&i_s, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
 
       using namespace ranges;
       const auto us =
-          i | views::exclusive_scan(0, f) | views::transform(r);
+          i_s | views::exclusive_scan(0, f) | views::transform(r);
 
       return std::vector(std::cbegin(us), std::cend(us));
     };
