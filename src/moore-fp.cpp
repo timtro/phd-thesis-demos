@@ -61,15 +61,15 @@ struct MooreMachine {
 //                                                                         f]]]1
 // Moore Coalgebra f[[[1
 
-// M<S> = (I ⊸ S, O)
+// M<S> = $(I ⊸ S, O)$
 template <typename S>
 using M = std::pair<std::function<S(Input)>, Output>;
 
-//         M<𝑓>
-//    M<A> ────🢒 M<B>
+//              M<𝑓>
+//         M<A> ────🢒 M<B>
 //
-//     A ───────🢒 Λ
-//          𝑓
+//          A ───────🢒 B
+//               𝑓
 template <typename A, typename B>
 auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
   return [f](const M<A> ma) -> M<B> {
@@ -78,7 +78,7 @@ auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
   };
 }
 
-// MCoalg = S → M<S> = S → ( I ⊸ S, O);
+// $\mathtt{MCoalg⟨S⟩} ≅ S → 𝘔⟨S⟩ = S → ( I ⊸ S, O)$
 template <typename S>
 using MCoalgebra = std::function<M<S>(S)>;
 
@@ -128,12 +128,9 @@ auto make_cata(OPAlgebra<S, I> alg)
   };
 }
 // f]]]1
-// List co/algebra stuff f[[[1
+// List coalgebra stuff f[[[1
 template <typename T, typename U>
 using OPCoalgebra = std::function<OP<T, U>(T)>;
-
-template <typename X>
-using OP_O = OP<X, Output>;
 
 template <typename T>
 auto maybe_head_and_tail(std::vector<T> ts)
@@ -147,7 +144,7 @@ auto maybe_head_and_tail(std::vector<T> ts)
 }
 
 template <typename T, typename U>
-auto pr_ana(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
+auto ana_op(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
   std::vector<U> us;
 
   auto result_ab = coalg(seed);
@@ -166,12 +163,12 @@ auto pr_ana(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
   }
 }
 //                                                                         f]]]1
-// SCANIFY f[[[1 scanify :: 𝘗ᵣAlgebra state value → 𝘗ᵣAlgebra
-// (Snoc state) value scanify alg (Pᵣ Nothing) = nil ⧺ alg (Pᵣ
-// Nothing) scanify alg (Pᵣ (Just ( accum , val))) = accum ⧺ alg
-// (Pᵣ (Just (s0, val)))
-//   where
-//     s0 = snocHead accum
+// SCANIFY f[[[1
+//
+// scanify :: OPAlgebra<S,I> → OPAlgebra<S,I>
+// transforms an algebra so that its catamorphism produces a
+// scan.
+
 template <typename S, typename I>
 auto scanify(OPAlgebra<S, I> alg)
     -> OPAlgebra<std::vector<S>, I> {
@@ -206,8 +203,8 @@ TEST_CASE(
     "Given a MooreMachine where,\n"
     "   S = O = I = int\n"
     "  s0 = 0\n"
-    "   f = (i, s) $↦$ s + i\n"
-    "   r = s $↦$ s,\n"
+    "   $f$ = (i, s) $↦$ s + i\n"
+    "   $r$ = s $↦$ s,\n"
     "and given an input vector `i_s` and manually computed "
     "`running_sum`…") {
   State s0 = 0;
@@ -223,7 +220,7 @@ TEST_CASE(
 
   AND_GIVEN(
       "a function that explicitly demonstrates the "
-      "recursion of f while generating a sequence of "
+      "recursion of $f$ while generating a sequence of "
       "successive output values.") {
 
     auto manual_moore_machine =
@@ -247,13 +244,14 @@ TEST_CASE(
     }
   }
 
-  AND_GIVEN("A $𝘗^*_I$-algebra embodying $f$ and $s0$") {
+  AND_GIVEN(
+      "A $𝘗^*_I$-algebra embodying $f$ and $s0$, and it's "
+      "catamorphism $⦇\\mathtt{alg}⦈$") {
     OPAlgebra<State, Input> alg = moore_to_algebra(mm);
+    auto phi = compose(mm.rmap, make_cata(alg));
 
-    THEN("The algebra catamorphised over the input list should "
-         "produce the total sum") {
-
-      auto phi = compose(mm.rmap, make_cata(alg));
+    THEN("The catamorphism applied to i_s should produce the "
+         "total sum") {
       REQUIRE(phi(i_s) == running_sum.back());
     }
 
@@ -323,11 +321,11 @@ TEST_CASE(
       const auto [s0, f, r] = mm;
 
       using namespace ranges;
-      const auto us =
+      const auto u_s =
           i_s | views::exclusive_scan(0, f) |
           views::transform(r);
 
-      return std::vector(std::cbegin(us), std::cend(us));
+      return std::vector(std::cbegin(u_s), std::cend(u_s));
     };
 
     THEN("the function should return a running sum including "
