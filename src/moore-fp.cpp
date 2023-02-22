@@ -92,33 +92,41 @@ auto moore_to_coalgebra(MooreMachine<I, S, O> mm)
 
 //                                                                         f]]]1
 // Moore algebra f[[[1
+
+// $𝘖𝘗⟨S,I⟩ ≅ 𝟣 + S × I$
 template <typename S, typename I>
 using OP = std::optional<std::pair<S, I>>;
 
+// $\mathtt{OPAlgebra} = \texttt{OP}⟨S, I⟩$
 template <typename S, typename I>
 using OPAlgebra = std::function<S(OP<S, I>)>;
 
-template <typename I, typename S, typename O>
-auto moore_to_algebra(MooreMachine<I, S, O> mm)
-    -> OPAlgebra<S, I> {
-  return [mm](OP<S, I> o_sxi) {
+// $𝘖𝘗I⟨S⟩ ≅ 𝟣 + S × I$
+template <typename S>
+using OPI = std::optional<std::pair<S, Input>>;
+
+// $\mathtt{OPIAlgebra} = \texttt{OPI}⟨S⟩$
+template <typename S>
+using OPIAlgebra = std::function<S(OPI<S>)>;
+
+template <typename S>
+auto moore_to_algebra(MooreMachine<Input, S, Output> mm)
+    -> OPIAlgebra<S> {
+  return [mm](OPI<S> o_sxi) -> S {
     if (!o_sxi)
       return mm.s0;
 
-    auto [s, i] = *o_sxi;
+    auto [s, i] = o_sxi.value();
     return mm.tmap(s, i);
   };
 }
 
-template <typename S, typename I>
-auto make_cata(OPAlgebra<S, I> alg)
-    -> std::function<S(std::vector<I>)> {
+template <typename S>
+auto make_cata(OPIAlgebra<S> alg)
+    -> std::function<S(std::vector<Input>)> {
 
-  return [alg](std::vector<I> i_s) -> S {
+  return [alg](std::vector<Input> i_s) -> S {
     auto s0 = alg(std::nullopt);
-
-    if (i_s.empty())
-      return s0;
 
     auto accumulator = s0;
     for (auto &i : i_s)
@@ -169,16 +177,32 @@ auto ana_op(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
 // transforms an algebra so that its catamorphism produces a
 // scan.
 
-template <typename S, typename I>
-auto scanify(OPAlgebra<S, I> alg)
-    -> OPAlgebra<std::vector<S>, I> {
-  return [alg](OP<std::vector<S>, I> op) -> std::vector<S> {
+// This commented version uses OPAlgebra, and templates on input
+// type.
+//
+// template <typename S, typename I>
+// auto scanify(OPAlgebra<S, I> alg)
+//     -> OPAlgebra<std::vector<S>, I> {
+//   return [alg](OP<std::vector<S>, I> op) -> std::vector<S> {
+//     if (!op)
+//       return std::vector{alg(std::nullopt)};
+//
+//     auto [accum, val] = *op;
+//     auto s0 = accum.back();
+//     accum.push_back(alg(OP<S, I>{{s0, val}}));
+//     return accum;
+//   };
+// }
+
+template <typename S>
+auto scanify(OPIAlgebra<S> alg) -> OPIAlgebra<std::vector<S>> {
+  return [alg](OPI<std::vector<S>> op) -> std::vector<S> {
     if (!op)
       return std::vector{alg(std::nullopt)};
 
     auto [accum, val] = *op;
     auto s0 = accum.back();
-    accum.push_back(alg(OP<S, I>{{s0, val}}));
+    accum.push_back(alg(OPI<S>{{s0, val}}));
     return accum;
   };
 }
@@ -210,10 +234,10 @@ TEST_CASE(
   State s0 = 0;
   auto f = [](State s, Input i) -> State { return s + i; };
   auto r = id<State>;
-  MooreMachine<Input, State, Output> mm = {s0, f, r};
+  auto mm = MooreMachine<Input, State, Output>{s0, f, r};
 
   auto i_s = std::vector<Input>{0, 1, 2, 3, 4};
-  // running_sum = $\set{s₀, r∘f(s_k,i_k)}_{k=0}^4$.
+  // running_sum = $\set{s₀,\; r∘f(s_k,i_k)}_{k=0}^4$.
   auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
   //                                     $↑$
   //                              Initial state
@@ -245,14 +269,23 @@ TEST_CASE(
   }
 
   AND_GIVEN(
-      "A $𝘗^*_I$-algebra embodying $f$ and $s0$, and it's "
-      "catamorphism $⦇\\mathtt{alg}⦈$") {
-    OPAlgebra<State, Input> alg = moore_to_algebra(mm);
+      "A $𝘗^*_I$-algebra embodying $f$ and $s0$, and "
+      "corresponding I/O response function "
+      "$\\mathtt{phi} = r ∘ ⦇\\mathtt{alg}⦈$") {
+    auto alg = moore_to_algebra(mm);
     auto phi = compose(mm.rmap, make_cata(alg));
 
-    THEN("The catamorphism applied to i_s should produce the "
-         "total sum") {
-      REQUIRE(phi(i_s) == running_sum.back());
+    auto empty = std::vector<Input>();
+    auto total =
+        mm.rmap(std::accumulate(cbegin(i_s), cend(i_s), 0));
+
+    THEN("phi applied to an empty list should produce the "
+         "initial state.") {
+      REQUIRE(phi(empty) == mm.rmap(mm.s0));
+    }
+
+    THEN("phi applied to i_s should produce its sum total.") {
+      REQUIRE(phi(i_s) == total);
     }
 
     THEN("The scanified version of that algebra should produce "
@@ -283,7 +316,8 @@ TEST_CASE(
       return output;
     };
 
-    THEN("expect a running sum without output from the initial "
+    THEN("expect a running sum without output from the "
+         "initial "
          "state.") {
       REQUIRE(rxcpp_scan() == drop_first(running_sum));
     }
@@ -305,7 +339,8 @@ TEST_CASE(
       return output;
     };
 
-    THEN("expect a running sum without output from the initial "
+    THEN("expect a running sum without output from the "
+         "initial "
          "state.") {
       REQUIRE(std_transform() == drop_first(running_sum));
     }
