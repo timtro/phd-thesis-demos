@@ -22,7 +22,8 @@ namespace tf {
       };
     else
       return [f, fs...](auto &&x) -> decltype(auto) {
-        return std::invoke(f, compose(fs...)(std::forward<decltype(x)>(x)));
+        return std::invoke(
+            f, compose(fs...)(std::forward<decltype(x)>(x)));
       };
   }
 
@@ -31,7 +32,8 @@ namespace tf {
     if constexpr (sizeof...(Fs) < 1)
       return std::invoke(f, std::forward<decltype(x)>(x));
     else
-      return pipe(std::invoke(f, std::forward<decltype(x)>(x)), gh...);
+      return pipe(
+          std::invoke(f, std::forward<decltype(x)>(x)), gh...);
   }
 
   template <typename F>
@@ -42,7 +44,8 @@ namespace tf {
       return [f](auto &&x) {
         return curry(
             // perfectly capture x here:
-            [f, x](auto &&... xs) -> decltype(std::invoke(f, x, xs...)) {
+            [f, x](auto &&...xs)
+                -> decltype(std::invoke(f, x, xs...)) {
               return std::invoke(f, x, xs...);
             });
       };
@@ -51,16 +54,19 @@ namespace tf {
   struct CallT {
   } call;
 
-  // Looks for a call_t as a sentinal to signal the end of the curry.
+  // Looks for a call_t as a sentinal to signal the end of the
+  // curry.
   template <typename F>
   constexpr decltype(auto) curry_variadic(F f) {
     return [f](auto x) -> decltype(auto) {
-      if constexpr (std::is_same<std::decay_t<decltype(x)>, CallT>::value)
+      if constexpr (
+          std::is_same<std::decay_t<decltype(x)>, CallT>::value)
         return std::invoke(f);
       else
         return curry_variadic(
             // perfectly capture x here:
-            [f, x](auto &&... xs) -> decltype(std::invoke(f, x, xs...)) {
+            [f, x](auto &&...xs)
+                -> decltype(std::invoke(f, x, xs...)) {
               return std::invoke(f, x, xs...);
             });
     };
