@@ -25,3 +25,15 @@ target_include_directories(utest-test-fixtures PUBLIC include)
 add_executable(category-Cpp src/category-Cpp.cpp)
 target_link_libraries(category-Cpp CATCH)
 target_include_directories(category-Cpp PUBLIC include)
+
+add_executable(list-functor src/list-functor.cpp)
+target_link_libraries(list-functor CATCH)
+target_include_directories(list-functor PUBLIC include)
+
+add_executable(maybe-optional-functor src/maybe-optional-functor.cpp)
+target_link_libraries(maybe-optional-functor CATCH)
+target_include_directories(maybe-optional-functor PUBLIC include)
+
+# add_executable(filename src/filename.cpp)
+# target_link_libraries(filename CATCH)
+# target_include_directories(filename PUBLIC include)
