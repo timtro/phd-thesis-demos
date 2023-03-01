@@ -290,8 +290,7 @@ TEST_CASE(
       return output;
     };
 
-    THEN("expect a running sum without output from the "
-         "initial "
+    THEN("expect a running sum without output from the initial "
          "state.") {
       REQUIRE(rxcpp_scan() == drop_first(running_sum));
     }
@@ -313,8 +312,7 @@ TEST_CASE(
       return output;
     };
 
-    THEN("expect a running sum without output from the "
-         "initial "
+    THEN("expect a running sum without output from the initial "
          "state.") {
       REQUIRE(std_transform() == drop_first(running_sum));
     }
