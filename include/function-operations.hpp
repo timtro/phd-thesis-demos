@@ -48,14 +48,14 @@ namespace tf {
       };
   }
 
-  struct call_t {
+  struct CallT {
   } call;
 
   // Looks for a call_t as a sentinal to signal the end of the curry.
   template <typename F>
   constexpr decltype(auto) curry_variadic(F f) {
     return [f](auto x) -> decltype(auto) {
-      if constexpr (std::is_same<std::decay_t<decltype(x)>, call_t>::value)
+      if constexpr (std::is_same<std::decay_t<decltype(x)>, CallT>::value)
         return std::invoke(f);
       else
         return curry_variadic(
