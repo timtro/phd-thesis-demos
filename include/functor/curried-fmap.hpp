@@ -1,3 +1,5 @@
+// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+
 #pragma once
 
 #include <utility>

@@ -1,4 +1,4 @@
-// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]
+// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 
 #include <functional>
 #include <iostream>
@@ -25,15 +25,15 @@ using State = int;
 using Output = int;
 using Input = int;
 
-// Classical Moore Machine ............................................... f[[[1
+// Classical Moore Machine ................................ f[[[1
 template <typename I, typename S, typename O>
 struct MooreMachine {
   S s0;
   std::function<S(S, I)> tmap;
   std::function<O(S)> rmap;
 };
-// ....................................................................... f]]]1
-// Moore Coalgebra ....................................................... f[[[1
+// ........................................................ f]]]1
+// Moore Coalgebra ........................................ f[[[1
 
 // M<S> = $(I ⊸ S, O)$
 template <typename S>
@@ -64,8 +64,8 @@ auto moore_to_coalgebra(MooreMachine<I, S, O> mm)
   };
 }
 
-// ....................................................................... f]]]1
-// Moore algebra ......................................................... f[[[1
+// ........................................................ f]]]1
+// Moore algebra .......................................... f[[[1
 
 // $𝘖𝘗⟨S,I⟩ ≅ 𝟣 + S × I$
 template <typename S, typename I>
@@ -109,8 +109,8 @@ auto make_cata(OPIAlgebra<S> alg)
     return accumulator;
   };
 }
-// ....................................................................... f]]]1
-// List coalgebra stuff .................................................. f[[[1
+// ........................................................ f]]]1
+// List coalgebra stuff ................................... f[[[1
 template <typename T, typename U>
 using OPCoalgebra = std::function<OP<T, U>(T)>;
 
@@ -144,8 +144,8 @@ auto ana_op(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
       return us;
   }
 }
-// ....................................................................... f]]]1
-// SCANIFY ............................................................... f[[[1
+// ........................................................ f]]]1
+// SCANIFY ................................................ f[[[1
 //
 // scanify :: OPAlgebra<S,I> → OPAlgebra<S,I>
 // transforms an algebra so that its catamorphism produces a
@@ -180,8 +180,8 @@ auto scanify(OPIAlgebra<S> alg) -> OPIAlgebra<std::vector<S>> {
     return accum;
   };
 }
-// ....................................................................... f]]]1
-// Utilities ............................................................. f[[[1
+// ........................................................ f]]]1
+// Utilities .............................................. f[[[1
 template <typename T>
 auto drop_first(std::vector<T> ts) -> std::vector<T> {
   assert(!ts.empty());
@@ -195,7 +195,7 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
   ts.pop_back();
   return ts;
 }
-// ....................................................................... f]]]1
+// ........................................................ f]]]1
 
 TEST_CASE(
     "Given a MooreMachine where,\n"

@@ -1,6 +1,8 @@
+// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+
+#include <algorithm>
 #include <catch2/catch.hpp>
 #include <optional>
-#include <algorithm>
 
 #include "test-fixtures.hpp"
 using tst::A; // Tag for unit type
@@ -13,23 +15,26 @@ using tst::g;  // g : B → C
 using tst::h;  // h : C → D
 using tst::id; // id : T → T
 
-#include "../include/function-operations.hpp"
+#include "../include/Cpp-arrows.hpp"
 #include "../include/functor/foptional.hpp"
 
 #include "../include/functor/curried-fmap.hpp"
 using tf::as_functor; // as_functor : G<A> → F<A>;
 using tf::fmap;       // fmap : (A → B) → F<A> → F<B>
 
-TEST_CASE("The std::optional type constructor should be a functor:") {
+TEST_CASE(
+    "The std::optional type constructor should be a "
+    "functor:") {
   REQUIRE(tf::is_functor<std::optional>::value == true);
 }
 
-TEST_CASE("Given a std::optional<A> holding a value…", "[mathematical]") {
+TEST_CASE("Given a std::optional<A> holding a value…", //
+    "[mathematical]") {
 
   std::optional<A> oa{A{}};
 
-  SECTION("… and a function f : A → B, fmap should produce an occupied "
-          "std::optional<B>:") {
+  SECTION("… and a function f : A → B, fmap should produce an "
+          "occupied std::optional<B>:") {
     REQUIRE(fmap(f, oa) == std::make_optional(B{}));
     REQUIRE(*fmap(f, oa) == B{});
   }
@@ -48,8 +53,9 @@ TEST_CASE("Given a std::optional<A> holding a value…", "[mathematical]") {
 TEST_CASE("Given an empty std::optional<A>…", "[mathematical]") {
   std::optional<A> oa;
 
-  SECTION("… and a function f : A → B, fmap should produce an empty "
-          "std::optional<B>:") {
+  SECTION(
+      "… and a function f : A → B, fmap should produce an empty "
+      "std::optional<B>:") {
     REQUIRE(fmap(f, oa) == std::optional<B>{});
   }
 
@@ -74,31 +80,36 @@ auto nccpy_to_cpy(const std::vector<CtorLogger::flat_t> &v) {
   return outv;
 }
 
-TEST_CASE("The only difference between mapping id on an optional containing a "
-          "value, and simply invoking id on a the dereferenced optional should "
-          "be that fmap forces the use of a const-copy constructor.",
-          "[CtorAs]") {
+TEST_CASE(
+    "The only difference between mapping id on an "
+    "optional containing a value, and simply invoking id "
+    "on a the dereferenced optional should be that fmap "
+    "forces the use of a const-copy constructor.",
+    "[CtorAs]") {
   std::optional<CtorLogger> oCtorLogger;
   oCtorLogger.emplace(); // flags = {Default}
 
-  auto RawInvokeResult = std::make_optional(std::invoke(id, *oCtorLogger));
+  auto RawInvokeResult =
+      std::make_optional(std::invoke(id, *oCtorLogger));
 
   oCtorLogger.emplace(); // refresh the logger to default
-  REQUIRE(oCtorLogger->flags == std::vector{CtorLogger::Default});
+  REQUIRE(
+      oCtorLogger->flags == std::vector{CtorLogger::Default});
 
   auto FmapResult = fmap(id, oCtorLogger);
-  auto rawFlagsTransformed = nccpy_to_cpy(RawInvokeResult->flags);
+  auto rawFlagsTransformed =
+      nccpy_to_cpy(RawInvokeResult->flags);
 
   REQUIRE(FmapResult->flags != RawInvokeResult->flags);
   REQUIRE(FmapResult->flags == rawFlagsTransformed);
 }
 
- // TEST_CASE("Test delayed binding"){
- //   // auto sqr = [](int x) -> int { return x * x; };
- //   // auto osqr = fmap(sqr);
- //   // auto result = osqr(std::optional<int>{4});
- //   const auto Ff = fmap(id);
- //   auto result = f(std::optional<A>{});
- //
- //   REQUIRE( *result == A{} );
- // }
+// TEST_CASE("Test delayed binding"){
+//   // auto sqr = [](int x) -> int { return x * x; };
+//   // auto osqr = fmap(sqr);
+//   // auto result = osqr(std::optional<int>{4});
+//   const auto Ff = fmap(id);
+//   auto result = f(std::optional<A>{});
+//
+//   REQUIRE( *result == A{} );
+// }

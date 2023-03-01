@@ -1,3 +1,5 @@
+// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+
 #pragma once
 
 #include <ostream>
@@ -39,8 +41,8 @@ struct D {bool operator==(const D) const { return true; }};
   // id : T → T
   const auto id = [](auto x) { return x; };
 
-  // Logs which constructor is called by pushing flags into a vector. Also
-  // records if an instance was *moved from*!
+  // Logs which constructor is called by pushing flags into a
+  // vector. Also records if an instance was *moved from*!
 
   struct CtorLogger {
     enum CtorLoggerFlags {
@@ -104,7 +106,7 @@ struct D {bool operator==(const D) const { return true; }};
   };
 
   std::ostream &operator<<(std::ostream &os,
-                           CtorLogger::CtorLoggerFlags const &flag) {
+      CtorLogger::CtorLoggerFlags const &flag) {
     switch (flag) {
     case CtorLogger::CtorLoggerFlags::Default:
       os << "Def ";
