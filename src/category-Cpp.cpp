@@ -42,10 +42,8 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("`compose(f)` == f.id_A == id_B.f.",
-    "[compose], "
-    "[mathematical"
-    "]") {
+TEST_CASE("`compose(f)` == f.id_A == id_B.f.", //
+    "[compose], [mathematical]") {
   REQUIRE(compose(f)(A{}) == compose(f, id<A>)(A{}));
   REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
 }
@@ -71,9 +69,8 @@ struct Getable {
   [[nodiscard]] T get() const { return N; }
 };
 
-TEST_CASE("Sould be able to compose with PMFs",
-    "[compose], "
-    "[interface]") {
+TEST_CASE("Sould be able to compose with PMFs", //
+    "[compose], [interface]") {
   const auto a = A{};
   Getable getable_a{a};
   auto fog = compose(id<A>, &Getable<A>::get);
@@ -82,8 +79,7 @@ TEST_CASE("Sould be able to compose with PMFs",
 
 TEST_CASE(
     "Return of a composed function should preserve the "
-    "rvalue-refness of "
-    "the outer function",
+    "rvalue-refness of the outer function", //
     "[compose], [interface]") {
   B b{};
   auto ref_to_b = [&b](A) -> B & { return b; };
@@ -99,17 +95,15 @@ TEST_CASE(
   REQUIRE(compose(h, g, f)(A{}) == pipe(A{}, f, g, h));
 }
 
-TEST_CASE(
-    "`pipe(f)` == `pipe(a, id_A, F)`` == `pipe(b, f "
-    "id_B)`.",
+TEST_CASE(                                                    //
+    "`pipe(f)` == `pipe(a, id_A, F)`` == `pipe(b, f id_B)`.", //
     "[pipe], [mathematical]") {
   REQUIRE(pipe(A{}, f) == pipe(A{}, id<A>, f));
   REQUIRE(pipe(A{}, id<A>, f) == pipe(A{}, f, id<B>));
 }
 
-TEST_CASE("Pipes should work with C-functions",
-    "[pipe], "
-    "[interface]") {
+TEST_CASE("Pipes should work with C-functions", //
+    "[pipe], [interface]") {
   REQUIRE(pipe(A{}, id<A>, id<A>) == A{});
 }
 
@@ -124,9 +118,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "Curried non-variadic functions should bind arguments, one "
-    "at a "
-    "time, from left to right.",
+    "Curried non-variadic functions should bind "
+    "arguments, one at a time, from left to right.", //
     "[curry], [non-variadic], [interface]") {
 
   // abcd : (A, B, C, D) → (A, B, C, D)
@@ -144,9 +137,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "Curried variadic functions should bind arguments, one at a "
-    "time, "
-    "from left to right untill a call-object is passed.",
+    "Curried variadic functions should bind arguments, "
+    "one at a time, from left to right untill a "
+    "call-object is passed.", //
     "[curry], [variadic], [interface]") {
   // argument_echo : (Q → W → …) → (Q, W, …), for any types Q, W,
   // ….
@@ -167,9 +160,8 @@ TEST_CASE(
 
 D ABC_to_D(A, B, C) { return {}; }
 
-TEST_CASE("C-functions should curry",
-    "[curry], [variadic], "
-    "[interface]") {
+TEST_CASE("C-functions should curry", //
+    "[curry], [variadic], [interface]") {
 
   auto A_B_C_to_D = curry(ABC_to_D);
   REQUIRE(A_B_C_to_D(A{})(B{})(C{}) == D{});
@@ -179,9 +171,8 @@ struct Foo {
   D d_returner(A, B, C) { return {}; }
 };
 
-TEST_CASE("PMFs should curry",
-    "[curry], [non-variadic], "
-    "[interface]") {
+TEST_CASE("PMFs should curry", //
+    "[curry], [non-variadic], [interface]") {
   Foo foo;
   auto foo_d_returner = curry(&Foo::d_returner);
   REQUIRE(foo_d_returner(&foo)(A{})(B{})(C{}) == D{});
@@ -189,9 +180,9 @@ TEST_CASE("PMFs should curry",
 }
 
 TEST_CASE(
-    "A curried non-variadic function should preserve the lvalue "
-    "ref-ness "
-    "of whatever is returned from the wrapped function.",
+    "A curried non-variadic function should preserve the "
+    "lvalue ref-ness of whatever is returned from the "
+    "wrapped function.", //
     "[curry], [non-variadic], [interface]") {
   A a{};
   auto ref_to_a = [&a]() -> A & { return a; };
@@ -200,9 +191,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "A curried variadic function should preserve the lvalue "
-    "ref-ness of "
-    "whatever is returned from the wrapped function.",
+    "A curried variadic function should preserve the "
+    "lvalue ref-ness of whatever is returned from the "
+    "wrapped function.", //
     "[curry], [variadic], [interface]") {
   A a{};
   auto ref_to_a = [&a](...) -> A & { return a; };
