@@ -13,7 +13,7 @@
 
 #include <catch2/catch.hpp>
 
-#include "../include/function-operations.hpp"
+#include "../include/Cpp-arrows.hpp"
 
 using tf::compose;
 using tf::curry;

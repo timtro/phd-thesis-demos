@@ -9,7 +9,7 @@ using tst::f; // f : A → B
 using tst::g; // g : B → C
 using tst::h; // h : C → D
 
-#include "../include/function-operations.hpp"
+#include "../include/Cpp-arrows.hpp"
 
 #include <type_traits>
 
