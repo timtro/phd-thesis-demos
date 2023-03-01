@@ -4,7 +4,7 @@
 #include <catch2/catch.hpp>
 #include <optional>
 
-#include "test-fixtures.hpp"
+#include "test-tools.hpp"
 using tst::A; // Tag for unit type
 using tst::B; // Tag for unit type
 using tst::C; // Tag for unit type
@@ -15,10 +15,10 @@ using tst::g;  // g : B → C
 using tst::h;  // h : C → D
 using tst::id; // id : T → T
 
-#include "../include/Cpp-arrows.hpp"
-#include "../include/functor/foptional.hpp"
+#include "Cpp-arrows.hpp"
+#include "functor/foptional.hpp"
 
-#include "../include/functor/curried-fmap.hpp"
+#include "functor/curried-fmap.hpp"
 using tf::as_functor; // as_functor : G<A> → F<A>;
 using tf::fmap;       // fmap : (A → B) → F<A> → F<B>
 

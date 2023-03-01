@@ -1,7 +1,7 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <catch2/catch.hpp>
 
-#include "test-fixtures.hpp"
+#include "test-tools.hpp"
 using tst::A; // Tag for unit type
 using tst::B; // Tag for unit type
 using tst::C; // Tag for unit type
@@ -10,7 +10,7 @@ using tst::f; // f : A → B
 using tst::g; // g : B → C
 using tst::h; // h : C → D
 
-#include "../include/Cpp-arrows.hpp"
+#include "Cpp-arrows.hpp"
 
 using tf::compose;
 using tf::curry;
