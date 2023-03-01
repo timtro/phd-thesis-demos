@@ -17,3 +17,11 @@ add_library (CATCH src/catch.cpp)
 add_executable(moore-demo src/moore-fp.cpp)
 target_link_libraries(moore-demo CATCH)
 target_include_directories(moore-demo PUBLIC include)
+
+add_executable(utest-test-fixtures src/utest-test-fixtures.cpp)
+target_link_libraries(utest-test-fixtures CATCH)
+target_include_directories(utest-test-fixtures PUBLIC include)
+
+add_executable(category-Cpp src/category-Cpp.cpp)
+target_link_libraries(category-Cpp CATCH)
+target_include_directories(category-Cpp PUBLIC include)
