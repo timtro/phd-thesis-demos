@@ -16,3 +16,4 @@ add_library (CATCH src/catch.cpp)
 
 add_executable(moore-demo src/moore-fp.cpp)
 target_link_libraries(moore-demo CATCH)
+target_include_directories(moore-demo PUBLIC include)
