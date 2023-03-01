@@ -231,17 +231,17 @@ TEST_CASE(
     "   $r$ = s $↦$ s,\n"
     "and given an input vector `i_s` and manually computed "
     "`running_sum`…") {
-  State s0 = 0;
-  auto f = [](State s, Input i) -> State { return s + i; };
-  auto r = id<State>;
-  auto mm = MooreMachine<Input, State, Output>{s0, f, r};
+  const State s0 = 0;
+  const auto f = [](State s, Input i) -> State { return s + i; };
+  const auto r = id<State>;
+  const auto mm = MooreMachine<Input, State, Output>{s0, f, r};
 
-  auto i_s = std::vector<Input>{0, 1, 2, 3, 4};
+  const auto i_s = std::vector<Input>{0, 1, 2, 3, 4};
   // running_sum = $\set{s₀,\; r∘f(s_k,i_k)}_{k=0}^4$.
-  auto running_sum = std::vector<Output>{0, 0, 1, 3, 6, 10};
-  //                                     $↑$
-  //                              Initial state
-
+  const auto running_sum = // $\set{s₀,\; r∘f(s_k,i_k)}_{k=0}^4$.
+      std::vector<Output>{0, 0, 1, 3, 6, 10};
+  //                      $↑$
+  //               Initial state
   AND_GIVEN(
       "a function that explicitly demonstrates the "
       "recursion of $f$ while generating a sequence of "
