@@ -62,7 +62,7 @@ template <typename T>
 struct Getable {
   T N;
   Getable(T N) : N(N) {}
-  T get() const { return N; }
+  [[nodiscard]] T get() const { return N; }
 };
 
 TEST_CASE("Sould be able to compose with PMFs", "[compose], [interface]") {
