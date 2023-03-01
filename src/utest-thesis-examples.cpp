@@ -43,25 +43,25 @@ TEST_CASE("Example from list-functor") {
 
   SECTION("Sine of nums") {
     const auto vec_sin = fmap(sin);
-    auto sinNums = vec_sin(nums);
-    REQUIRE(sinNums.at(0) == std::sin(nums.at(0)));
-    REQUIRE(sinNums.at(1) == std::sin(nums.at(1)));
-    REQUIRE(sinNums.at(2) == std::sin(nums.at(2)));
-    REQUIRE(sinNums.at(3) == std::sin(nums.at(3)));
-    REQUIRE(sinNums.at(4) == std::sin(nums.at(4)));
+    auto sin_nums = vec_sin(nums);
+    REQUIRE(sin_nums.at(0) == std::sin(nums.at(0)));
+    REQUIRE(sin_nums.at(1) == std::sin(nums.at(1)));
+    REQUIRE(sin_nums.at(2) == std::sin(nums.at(2)));
+    REQUIRE(sin_nums.at(3) == std::sin(nums.at(3)));
+    REQUIRE(sin_nums.at(4) == std::sin(nums.at(4)));
   }
 
   SECTION("Sine-square of nums") {
     // auto vec_sin_sqr = fmap(compose(sqr, sin));
     // auto sinSqrNums = vec_sin_sqr(nums);
 
-    auto sinSqrNums = fmap(sqr)(fmap(sin)(nums));
+    auto sin_sqr_nums = fmap(sqr)(fmap(sin)(nums));
 
-    REQUIRE(sinSqrNums.at(0) == sqr(std::sin(nums.at(0))));
-    REQUIRE(sinSqrNums.at(1) == sqr(std::sin(nums.at(1))));
-    REQUIRE(sinSqrNums.at(2) == sqr(std::sin(nums.at(2))));
-    REQUIRE(sinSqrNums.at(3) == sqr(std::sin(nums.at(3))));
-    REQUIRE(sinSqrNums.at(4) == sqr(std::sin(nums.at(4))));
+    REQUIRE(sin_sqr_nums.at(0) == sqr(std::sin(nums.at(0))));
+    REQUIRE(sin_sqr_nums.at(1) == sqr(std::sin(nums.at(1))));
+    REQUIRE(sin_sqr_nums.at(2) == sqr(std::sin(nums.at(2))));
+    REQUIRE(sin_sqr_nums.at(3) == sqr(std::sin(nums.at(3))));
+    REQUIRE(sin_sqr_nums.at(4) == sqr(std::sin(nums.at(4))));
   }
 }
 
