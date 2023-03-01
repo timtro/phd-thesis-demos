@@ -1,14 +1,12 @@
 #pragma once
 
-#include "../function_traits.hpp"
 #include "functor.hpp"
 
 #include <algorithm>
+#include <array>
 #include <experimental/type_traits>
 #include <iterator>
 #include <type_traits>
-
-#include "../function_traits.hpp"
 
 using std::begin;
 using std::cbegin;
@@ -37,7 +35,7 @@ namespace tf {
   template <template <typename...> typename Functor, typename A,
             typename... FCtorArgs, typename F>
   auto fmap(F f, const Functor<A, FCtorArgs...> &as) {
-    Functor<trait::invoke_result_t<F, A>> bs;
+    Functor<std::invoke_result_t<F, A>> bs;
 
     if constexpr (dtl_::has_reserve_v<decltype(bs)>)
       bs.reserve(as.size());
@@ -54,7 +52,7 @@ namespace tf {
   // dependent type, which requires a little more care than a regular functor.
   template <typename F, typename A, size_t N>
   auto fmap(F f, const std::array<A, N> &as) {
-    std::array<trait::invoke_result_t<F, A>, N> bs;
+    std::array<std::invoke_result_t<F, A>, N> bs;
 
     std::transform(cbegin(as), cend(as), begin(bs), f);
     return bs;
