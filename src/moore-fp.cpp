@@ -11,6 +11,13 @@
 #include <range/v3/view/transform.hpp>
 #include <rxcpp/rx.hpp>
 
+namespace rx {
+  using namespace rxcpp;
+  using namespace rxcpp::operators;
+  using namespace rxcpp::sources;
+  using namespace rxcpp::util;
+} // namespace rx
+
 #include <catch2/catch.hpp>
 
 #include "Cpp-arrows.hpp"
@@ -25,19 +32,32 @@ using State = int;
 using Output = int;
 using Input = int;
 
+template<typename Dom, typename Cod>
+using hom = std::function<Cod(Dom)>;
+
+template<typename Dom1, typename Dom2, typename Cod>
+using hom2d = std::function<Cod(Dom1, Dom2)>;
+
+template<typename Cod,typename  Dom1,typename  Dom2>
+auto unpairify(hom<std::pair<Dom1, Dom2>, Cod> f){
+  return [f](Dom1 x, Dom2 y) -> Cod {
+    return f({x, y});
+  };
+}
+
 // Classical Moore Machine ................................ f[[[1
 template <typename I, typename S, typename O>
 struct MooreMachine {
   S s0;
-  std::function<S(S, I)> tmap;
-  std::function<O(S)> rmap;
+  hom2d<S, I, S> tmap; // $S × I → S$
+  hom<S, O> rmap;    //     $S → O$
 };
 // ........................................................ f]]]1
 // Moore Coalgebra ........................................ f[[[1
 
 // M<S> = $(I ⊸ S, O)$
 template <typename S>
-using M = std::pair<std::function<S(Input)>, Output>;
+using M = std::pair<hom<Input, S>, Output>;
 
 //              M<𝑓>
 //         M<A> ────🢒 M<B>
@@ -45,7 +65,7 @@ using M = std::pair<std::function<S(Input)>, Output>;
 //          A ───────🢒 B
 //               𝑓
 template <typename A, typename B>
-auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
+auto M_map(hom<A, B> f) -> hom<M<A>, M<B>> {
   return [f](const M<A> ma) -> M<B> {
     return {
         [f, ma](auto x) { return f(ma.first(x)); }, ma.second};
@@ -54,7 +74,7 @@ auto mmap(std::function<B(A)> f) -> std::function<M<B>(M<A>)> {
 
 // $\mathtt{MCoalg⟨S⟩} ≅ S → 𝘔⟨S⟩ = S → ( I ⊸ S, O)$
 template <typename S>
-using MCoalgebra = std::function<M<S>(S)>;
+using MCoalgebra = hom<S, M<S>>;
 
 template <typename I, typename S, typename O>
 auto moore_to_coalgebra(MooreMachine<I, S, O> mm)
@@ -73,7 +93,7 @@ using OP = std::optional<std::pair<S, I>>;
 
 // $\mathtt{OPAlgebra} = \texttt{OP}⟨S, I⟩$
 template <typename S, typename I>
-using OPAlgebra = std::function<S(OP<S, I>)>;
+using OPAlgebra = hom<OP<S, I>, S>;
 
 // $𝘖𝘗I⟨S⟩ ≅ 𝟣 + S × I$
 template <typename S>
@@ -81,7 +101,7 @@ using OPI = std::optional<std::pair<S, Input>>;
 
 // $\mathtt{OPIAlgebra} = \texttt{OPI}⟨S⟩$
 template <typename S>
-using OPIAlgebra = std::function<S(OPI<S>)>;
+using OPIAlgebra = hom<OPI<S>, S>;
 
 template <typename S>
 auto moore_to_algebra(MooreMachine<Input, S, Output> mm)
@@ -96,8 +116,7 @@ auto moore_to_algebra(MooreMachine<Input, S, Output> mm)
 }
 
 template <typename S>
-auto make_cata(OPIAlgebra<S> alg)
-    -> std::function<S(std::vector<Input>)> {
+auto make_cata(OPIAlgebra<S> alg) -> hom<std::vector<Input>, S> {
 
   return [alg](std::vector<Input> i_s) -> S {
     auto s0 = alg(std::nullopt);
@@ -112,7 +131,7 @@ auto make_cata(OPIAlgebra<S> alg)
 // ........................................................ f]]]1
 // List coalgebra stuff ................................... f[[[1
 template <typename T, typename U>
-using OPCoalgebra = std::function<OP<T, U>(T)>;
+using OPCoalgebra = hom<T, OP<T, U>>;
 
 template <typename T>
 auto maybe_head_and_tail(std::vector<T> ts)
@@ -145,7 +164,7 @@ auto ana_op(OPCoalgebra<T, U> coalg, T seed) -> std::vector<U> {
   }
 }
 // ........................................................ f]]]1
-// SCANIFY ................................................ f[[[1
+// Scanify ................................................ f[[[1
 //
 // scanify :: OPAlgebra<S,I> → OPAlgebra<S,I>
 // transforms an algebra so that its catamorphism produces a
@@ -181,6 +200,23 @@ auto scanify(OPIAlgebra<S> alg) -> OPIAlgebra<std::vector<S>> {
   };
 }
 // ........................................................ f]]]1
+// RxCpp operators for Moore machines ..................... f[[[1
+template <typename I, typename S>
+auto rx_scanl(S s0, hom2d<S, I, S> f)
+    -> hom<rx::observable<I>, rx::observable<S>> {
+  return [s0, f](rx::observable<I> obs) {
+    return obs.scan(s0, f).start_with(s0);
+  };
+}
+
+template <typename I, typename S, typename O>
+auto rx_moore_machine(MooreMachine<I, S, O> mm)
+    -> hom<rx::observable<I>, rx::observable<S>> {
+  return [mm](rx::observable<I> i) {
+    return i | rx_scanl(mm.s0, mm.tmap) | rx::map(mm.rmap);
+  };
+}
+// ........................................................ f]]]1
 // Utilities .............................................. f[[[1
 template <typename T>
 auto drop_first(std::vector<T> ts) -> std::vector<T> {
@@ -194,6 +230,17 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
   assert(!ts.empty());
   ts.pop_back();
   return ts;
+}
+
+template <typename T>
+auto make_vector_observable(std::vector<T> v)
+    -> rx::observable<T> {
+  return rx::observable<>::create<T>([=](rx::subscriber<T> s) {
+    for (auto each : v) {
+      s.on_next(each);
+    }
+    s.on_completed();
+  });
 }
 // ........................................................ f]]]1
 
@@ -269,19 +316,11 @@ TEST_CASE(
     }
   }
 
-  AND_GIVEN(
-      "a function using the scan combinator from RxC++ to "
-      "accumulate with f and then map r over the "
-      "result.") {
+  AND_GIVEN("an implementation of $ᵠ \\⦂ I^* → O$ in RxCpp") {
 
     auto rxcpp_scan = [&i_s, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
-      auto oi = rxcpp::observable<>::create<
-          Input>([&](rxcpp::subscriber<Input> s) {
-        for (auto each : i_s)
-          s.on_next(each);
-        s.on_completed();
-      });
+      auto oi = make_vector_observable(i_s);
 
       std::vector<Output> output;
       auto us = oi.scan(0, f).map(r);
@@ -293,6 +332,46 @@ TEST_CASE(
     THEN("expect a running sum without output from the initial "
          "state.") {
       REQUIRE(rxcpp_scan() == drop_first(running_sum));
+    }
+  }
+
+  AND_GIVEN("with rx_scnal") {
+
+    auto custom_moore_scan =
+        [&i_s, &mm]() -> std::vector<Output> {
+      const auto [s0, f, r] = mm;
+      auto oi = make_vector_observable(i_s);
+
+      auto us = oi | rx_scanl(s0, f) | rx::map(r);
+
+      std::vector<Output> output;
+      us.subscribe([&output](Output v) { output.push_back(v); });
+
+      return output;
+    };
+
+    THEN("expect a running sum without output from the initial "
+         "state.") {
+      REQUIRE(custom_moore_scan() == running_sum);
+    }
+  }
+
+  AND_GIVEN("With rx_moore_machine") {
+
+    auto custom_moore_scan =
+        [&i_s, &mm]() -> std::vector<Output> {
+      auto oi = make_vector_observable(i_s);
+      auto oo = oi | rx_moore_machine(mm);
+
+      std::vector<Output> output;
+      oo.subscribe([&output](Output v) { output.push_back(v); });
+
+      return output;
+    };
+
+    THEN("expect a running sum without output from the initial "
+         "state.") {
+      REQUIRE(custom_moore_scan() == running_sum);
     }
   }
 

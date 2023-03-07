@@ -53,7 +53,7 @@ namespace tf {
       };
   }
 
-  struct CallT {
+  struct Call_t {
   } call;
 
   // Looks for a call_t as a sentinal to signal the end of the
@@ -62,7 +62,7 @@ namespace tf {
   constexpr decltype(auto) curry_variadic(F f) {
     return [f](auto x) -> decltype(auto) {
       if constexpr (
-          std::is_same<std::decay_t<decltype(x)>, CallT>::value)
+          std::is_same<std::decay_t<decltype(x)>, Call_t>::value)
         return std::invoke(f);
       else
         return curry_variadic(

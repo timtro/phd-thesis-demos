@@ -32,8 +32,9 @@ using tf::fmap;       // fmap : (A → B) → F<A> → F<B>
 #include <valarray>
 #include <vector>
 
-TEST_CASE("The std::vector type constructor should be a "
-          "functor:") {
+TEST_CASE(
+    "The std::vector type constructor should be a "
+    "functor:") {
   REQUIRE(tf::is_functor<std::vector>::value == true);
 }
 
@@ -64,9 +65,10 @@ TEST_CASE("Given a std::vector<A> …", "[fmap]") {
     REQUIRE(fmap(id, as).at(0) == A{});
   }
 
-  SECTION("… it should satisfy the composition relation: "
-          "fmap(g, fmap(f, a)) "
-          "== fmap(g∘f, a)") {
+  SECTION(
+      "… it should satisfy the composition relation: "
+      "fmap(g, fmap(f, a)) "
+      "== fmap(g∘f, a)") {
     REQUIRE(fmap(g, fmap(f, as)).at(0) == C{});
     REQUIRE(fmap(g, fmap(f, as)).at(0) ==
             fmap(tf::compose(g, f), as).at(0));
@@ -126,9 +128,10 @@ TEST_CASE("Given a std::list<A> …", "[fmap]") {
     REQUIRE(*fmap(id, as).begin() == A{});
   }
 
-  SECTION("… it should satisfy the composition relation: "
-          "fmap(g, fmap(f, a)) "
-          "== fmap(g∘f, a)") {
+  SECTION(
+      "… it should satisfy the composition relation: "
+      "fmap(g, fmap(f, a)) "
+      "== fmap(g∘f, a)") {
     REQUIRE(*fmap(g, fmap(f, as)).begin() == C{});
     REQUIRE(*fmap(g, fmap(f, as)).begin() ==
             *fmap(tf::compose(g, f), as).begin());
@@ -192,9 +195,10 @@ TEST_CASE("Given a std::array<A,·> …", "[fmap]") {
           "it unchanged") {
     REQUIRE(fmap(id, as).at(0) == A{});
   }
-  SECTION("… it should satisfy the composition relation: "
-          "fmap(g, fmap(f, a)) "
-          "== fmap(g∘f, a)") {
+  SECTION(
+      "… it should satisfy the composition relation: "
+      "fmap(g, fmap(f, a)) "
+      "== fmap(g∘f, a)") {
     REQUIRE(fmap(g, fmap(f, as)).at(0) == C{});
     REQUIRE(fmap(g, fmap(f, as)).at(0) ==
             fmap(tf::compose(g, f), as).at(0));
@@ -227,8 +231,9 @@ TEST_CASE(
   REQUIRE(b[0].flags == b[1].flags);
 }
 
-TEST_CASE("The std::deque typeconstructor should be a "
-          "functor:") {
+TEST_CASE(
+    "The std::deque typeconstructor should be a "
+    "functor:") {
   REQUIRE(tf::is_functor<std::deque>::value == true);
 }
 
@@ -259,9 +264,10 @@ TEST_CASE("Given a std::deque<A> …", "[fmap]") {
     REQUIRE(fmap(id, as).at(0) == A{});
   }
 
-  SECTION("… it should satisfy the composition relation: "
-          "fmap(g, fmap(f, a)) "
-          "== fmap(g∘f, a)") {
+  SECTION(
+      "… it should satisfy the composition relation: "
+      "fmap(g, fmap(f, a)) "
+      "== fmap(g∘f, a)") {
     REQUIRE(fmap(g, fmap(f, as)).at(0) == C{});
     REQUIRE(fmap(g, fmap(f, as)).at(0) ==
             fmap(tf::compose(g, f), as).at(0));
@@ -291,8 +297,7 @@ TEST_CASE(
 
 TEST_CASE(
     "Given a function f : A → B, fmap should produce a function "
-    "object "
-    "which can bind to multiple functor types:",
+    "object which can bind to multiple functor types:",
     "[fmap], [curried]") {
   auto lifted_f = fmap(f);
   SECTION("… std::vector") {

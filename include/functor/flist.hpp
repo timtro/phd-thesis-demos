@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <experimental/type_traits>
+#include <functional>
 #include <iterator>
 #include <type_traits>
 

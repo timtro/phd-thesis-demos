@@ -18,6 +18,12 @@ using tf::curry_variadic;
 using tf::id;
 using tf::pipe;
 
+#include "functor/flist.hpp"
+
+template <typename A, typename B>
+using hom = std::function<B(A)>;
+
+// tfunc test cases ....................................... f[[[1
 TEST_CASE(
     "Polymorphic identity function should perfectly "
     "forward and …",
@@ -42,19 +48,10 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("`compose(f)` == f.id_A == id_B.f.", //
+TEST_CASE("compose(f) == f ∘ id_A == id_B ∘ f.", //
     "[compose], [mathematical]") {
   REQUIRE(compose(f)(A{}) == compose(f, id<A>)(A{}));
   REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
-}
-
-TEST_CASE("Check associativity: (h.g).f == h.(g.f)",
-    "[compose], [mathematical]") {
-  REQUIRE(D{} == compose(h, g, f)(A{}));
-  REQUIRE(
-      compose(h, g, f)(A{}) == compose(h, compose(g, f))(A{}));
-  REQUIRE(compose(compose(h, g), f)(A{}) ==
-          compose(h, compose(g, f))(A{}));
 }
 
 TEST_CASE("Compose two C-functions", "[compose], [interface]") {
@@ -227,7 +224,93 @@ TEST_CASE(
   auto increment = plus(1);
   REQUIRE(increment(0) == 1);
 }
+// ........................................................ f]]]1
+// Cpp structures ......................................... f[[[1
+// map : (A → B) → (vector<A> → vector<B>)
+// template <typename A, typename B>
+// auto vec_map(std::function<B(A)> f) {
+//   return [f](std::vector<A> as) -> std::vector<B> {
+//     std::vector<B> bs;
+//     bs.reserve(as.size());
+//
+//     std::transform(
+//         cbegin(as), cend(as), std::back_inserter(bs), f);
+//     return bs;
+//   };
+// }
 
-// Used in Thesis ......................................... f[[[1
+template <typename A, typename F>
+auto vector_map(F f) {
+  return [f](std::vector<A> as) {
+    std::vector<std::invoke_result_t<F, A>> bs;
+    bs.reserve(as.size());
+
+    std::transform(
+        cbegin(as), cend(as), std::back_inserter(bs), f);
+    return bs;
+  };
+}
+
+template <typename A, typename B, typename F>
+auto pair_lmap(F f) {
+  return [f](std::pair<A, B> ab)
+             -> std::pair<std::invoke_result_t<F, A>, B> {
+    auto [a, b] = ab;
+    return {f(a), b};
+  };
+}
+
+template <typename A, typename B, typename F>
+auto pair_rmap(F f) {
+  return [f](std::pair<A, B> ab)
+             -> std::pair<A, std::invoke_result_t<F, B>> {
+    auto [a, b] = ab;
+    return {a, f(b)};
+  };
+}
+
+template <typename A, typename X, typename Y>
+auto chom_map(hom<A, X> f) -> hom<A, Y> {
+  return [f](hom<X, Y> g) {
+    return compose(f, g);
+  };
+}
+
+// ........................................................ f]]]1
+// Demos of structure in Cpp .............................. f[[[1
+TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
+  REQUIRE(D{} == compose(h, g, f)(A{}));
+  REQUIRE(
+      compose(h, g, f)(A{}) == compose(h, compose(g, f))(A{}));
+  REQUIRE(compose(compose(h, g), f)(A{}) ==
+          compose(h, compose(g, f))(A{}));
+}
+
+TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
+  REQUIRE(f(A{}) == compose(f, id<A>)(A{}));
+  REQUIRE(f(A{}) == compose(id<B>, f)(A{}));
+  REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
+}
+
+TEST_CASE(
+    "Given a function f : A → B, map should produce a "
+    "function object that maps f over a vector<A> to "
+    "give a vector<B>") {
+  auto lifted_f = vector_map<A>(f);
+  auto as = std::vector{A{}, A{}, A{}};
+  REQUIRE(lifted_f(as) == std::vector{B{}, B{}, B{}});
+}
+
+TEST_CASE("pair_lmap") {
+  auto ac = std::pair<A, C>{{}, {}};
+  auto f_x_id = pair_lmap<A, C>(f);
+  REQUIRE(f_x_id(ac) == std::pair{B{}, C{}});
+}
+
+TEST_CASE("pair_rmap") {
+  auto ab = std::pair<A, B>{{}, {}};
+  auto id_x_g = pair_rmap<A, B>(g);
+  REQUIRE(id_x_g(ab) == std::pair{A{}, C{}});
+}
 
 // ........................................................ f]]]1
