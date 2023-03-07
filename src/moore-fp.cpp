@@ -32,32 +32,22 @@ using State = int;
 using Output = int;
 using Input = int;
 
-template<typename Dom, typename Cod>
-using hom = std::function<Cod(Dom)>;
-
-template<typename Dom1, typename Dom2, typename Cod>
-using hom2d = std::function<Cod(Dom1, Dom2)>;
-
-template<typename Cod,typename  Dom1,typename  Dom2>
-auto unpairify(hom<std::pair<Dom1, Dom2>, Cod> f){
-  return [f](Dom1 x, Dom2 y) -> Cod {
-    return f({x, y});
-  };
-}
+template<typename Sig>
+using hom = std::function<Sig>;
 
 // Classical Moore Machine ................................ f[[[1
 template <typename I, typename S, typename O>
 struct MooreMachine {
   S s0;
-  hom2d<S, I, S> tmap; // $S × I → S$
-  hom<S, O> rmap;    //     $S → O$
+  hom<S(S, I)> tmap; // $S × I → S$
+  hom<O(S)> rmap;    //     $S → O$
 };
 // ........................................................ f]]]1
 // Moore Coalgebra ........................................ f[[[1
 
 // M<S> = $(I ⊸ S, O)$
 template <typename S>
-using M = std::pair<hom<Input, S>, Output>;
+using M = std::pair<hom<S(Input)>, Output>;
 
 //              M<𝑓>
 //         M<A> ────🢒 M<B>
@@ -65,7 +55,7 @@ using M = std::pair<hom<Input, S>, Output>;
 //          A ───────🢒 B
 //               𝑓
 template <typename A, typename B>
-auto M_map(hom<A, B> f) -> hom<M<A>, M<B>> {
+auto M_map(hom<B(A)> f) -> hom<M<B>(M<A>)> {
   return [f](const M<A> ma) -> M<B> {
     return {
         [f, ma](auto x) { return f(ma.first(x)); }, ma.second};
@@ -74,7 +64,7 @@ auto M_map(hom<A, B> f) -> hom<M<A>, M<B>> {
 
 // $\mathtt{MCoalg⟨S⟩} ≅ S → 𝘔⟨S⟩ = S → ( I ⊸ S, O)$
 template <typename S>
-using MCoalgebra = hom<S, M<S>>;
+using MCoalgebra = hom<M<S>(S)>;
 
 template <typename I, typename S, typename O>
 auto moore_to_coalgebra(MooreMachine<I, S, O> mm)
@@ -93,7 +83,7 @@ using OP = std::optional<std::pair<S, I>>;
 
 // $\mathtt{OPAlgebra} = \texttt{OP}⟨S, I⟩$
 template <typename S, typename I>
-using OPAlgebra = hom<OP<S, I>, S>;
+using OPAlgebra = hom<S(OP<S, I>)>;
 
 // $𝘖𝘗I⟨S⟩ ≅ 𝟣 + S × I$
 template <typename S>
@@ -101,7 +91,7 @@ using OPI = std::optional<std::pair<S, Input>>;
 
 // $\mathtt{OPIAlgebra} = \texttt{OPI}⟨S⟩$
 template <typename S>
-using OPIAlgebra = hom<OPI<S>, S>;
+using OPIAlgebra = hom<S(OPI<S>)>;
 
 template <typename S>
 auto moore_to_algebra(MooreMachine<Input, S, Output> mm)
@@ -116,7 +106,7 @@ auto moore_to_algebra(MooreMachine<Input, S, Output> mm)
 }
 
 template <typename S>
-auto make_cata(OPIAlgebra<S> alg) -> hom<std::vector<Input>, S> {
+auto make_cata(OPIAlgebra<S> alg) -> hom<S(std::vector<Input>)> {
 
   return [alg](std::vector<Input> i_s) -> S {
     auto s0 = alg(std::nullopt);
@@ -131,7 +121,7 @@ auto make_cata(OPIAlgebra<S> alg) -> hom<std::vector<Input>, S> {
 // ........................................................ f]]]1
 // List coalgebra stuff ................................... f[[[1
 template <typename T, typename U>
-using OPCoalgebra = hom<T, OP<T, U>>;
+using OPCoalgebra = hom<OP<T, U>(T)>;
 
 template <typename T>
 auto maybe_head_and_tail(std::vector<T> ts)
@@ -202,8 +192,8 @@ auto scanify(OPIAlgebra<S> alg) -> OPIAlgebra<std::vector<S>> {
 // ........................................................ f]]]1
 // RxCpp operators for Moore machines ..................... f[[[1
 template <typename I, typename S>
-auto rx_scanl(S s0, hom2d<S, I, S> f)
-    -> hom<rx::observable<I>, rx::observable<S>> {
+auto rx_scanl(S s0, hom<S(S, I)> f)
+    -> hom<rx::observable<S>(rx::observable<I>)> {
   return [s0, f](rx::observable<I> obs) {
     return obs.scan(s0, f).start_with(s0);
   };
@@ -211,7 +201,7 @@ auto rx_scanl(S s0, hom2d<S, I, S> f)
 
 template <typename I, typename S, typename O>
 auto rx_moore_machine(MooreMachine<I, S, O> mm)
-    -> hom<rx::observable<I>, rx::observable<S>> {
+    -> hom<rx::observable<S>(rx::observable<I>)> {
   return [mm](rx::observable<I> i) {
     return i | rx_scanl(mm.s0, mm.tmap) | rx::map(mm.rmap);
   };
