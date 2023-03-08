@@ -11,6 +11,20 @@ using std::experimental::is_detected_v;
 
 namespace tf {
 
+  template <typename... Ts>
+  struct dom {};
+
+  template <typename Dom, typename Cod>
+  struct hom : public std::function<Cod(Dom)> {
+    using std::function<Cod(Dom)>::function;
+  };
+
+  template <typename Cod, typename... Ts>
+  struct hom<dom<Ts...>, Cod>
+      : public std::function<Cod(Ts...)> {
+    using std::function<Cod(Ts...)>::function;
+  };
+
   template <typename T>
   constexpr decltype(auto) id(T &&x) {
     return std::forward<T>(x);

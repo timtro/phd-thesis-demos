@@ -15,13 +15,12 @@ using tst::h; // h : C → D
 using tf::compose;
 using tf::curry;
 using tf::curry_variadic;
+using tf::dom;
+using tf::hom;
 using tf::id;
 using tf::pipe;
 
 #include "functor/flist.hpp"
-
-template <typename A, typename B>
-using hom = std::function<B(A)>;
 
 // tfunc test cases ....................................... f[[[1
 TEST_CASE(
@@ -271,11 +270,8 @@ auto pair_rmap(F f) {
 
 template <typename A, typename X, typename Y>
 auto chom_map(hom<A, X> f) -> hom<A, Y> {
-  return [f](hom<X, Y> g) {
-    return compose(f, g);
-  };
+  return [f](hom<X, Y> g) { return compose(f, g); };
 }
-
 // ........................................................ f]]]1
 // Demos of structure in Cpp .............................. f[[[1
 TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
