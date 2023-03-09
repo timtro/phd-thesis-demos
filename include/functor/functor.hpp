@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "../Cpp-arrows.hpp"
+
 #include <type_traits>
 #include <utility>
 
@@ -10,6 +12,7 @@ struct DumA_ {};
 struct DumB_ {};
 
 namespace tf {
+
   // fmap_t<> : a metafunction to deduce F<B> in:
   //   fmap: (A → B) → F<A> → F<B>
   template <template <typename, typename...> class Functor,

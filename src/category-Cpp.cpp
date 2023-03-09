@@ -1,5 +1,6 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <catch2/catch.hpp>
+#include <type_traits>
 
 #include "test-tools.hpp"
 using tst::A; // Tag for unit type
@@ -12,15 +13,22 @@ using tst::h; // h : C → D
 
 #include "Cpp-arrows.hpp"
 
+using tf::Cod;
 using tf::compose;
 using tf::curry;
-using tf::curry_variadic;
-using tf::dom;
-using tf::hom;
+using tf::Dom;
+using tf::Doms;
+using tf::Hom;
 using tf::id;
-using tf::pipe;
 
-#include "functor/flist.hpp"
+template <template <typename> typename F>
+struct Functor {
+  template <typename X>
+  using omap = F<X>;
+
+  template <typename Fn>
+  static auto fmap(Fn) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>>;
+};
 
 // tfunc test cases ....................................... f[[[1
 TEST_CASE(
@@ -84,36 +92,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "Piping should bear a relationship to composition, which is "
-    "basically an order reversal in the argument list, with the "
-    "inclusion of an initial argument.",
-    "[compose], [pipe], [mathematical]") {
-  REQUIRE(compose(h, g, f)(A{}) == pipe(A{}, f, g, h));
-}
-
-TEST_CASE(                                                    //
-    "`pipe(f)` == `pipe(a, id_A, F)`` == `pipe(b, f id_B)`.", //
-    "[pipe], [mathematical]") {
-  REQUIRE(pipe(A{}, f) == pipe(A{}, id<A>, f));
-  REQUIRE(pipe(A{}, id<A>, f) == pipe(A{}, f, id<B>));
-}
-
-TEST_CASE("Pipes should work with C-functions", //
-    "[pipe], [interface]") {
-  REQUIRE(pipe(A{}, id<A>, id<A>) == A{});
-}
-
-TEST_CASE(
-    "Return of a pipe should preserve the rvalue-refness "
-    "of the outer function",
-    "[compose], [interface]") {
-  B b{};
-  auto ref_to_b = [&b](A) -> B & { return b; };
-  REQUIRE(std::is_lvalue_reference<
-      decltype(pipe(A{}, ref_to_b))>::value);
-}
-
-TEST_CASE(
     "Curried non-variadic functions should bind "
     "arguments, one at a time, from left to right.", //
     "[curry], [non-variadic], [interface]") {
@@ -130,37 +108,6 @@ TEST_CASE(
   REQUIRE(b == B{});
   REQUIRE(c == C{});
   REQUIRE(d == D{});
-}
-
-TEST_CASE(
-    "Curried variadic functions should bind arguments, "
-    "one at a time, from left to right untill a "
-    "call-object is passed.", //
-    "[curry], [variadic], [interface]") {
-  // argument_echo : (Q → W → …) → (Q, W, …), for any types Q, W,
-  // ….
-  const auto argument_echo = [](auto... xs) {
-    return std::tuple<decltype(xs)...>{xs...};
-  };
-
-  // argument_echo··· : Q → W → … → (Q, W, …), for any types Q,
-  // W, ….
-  auto argument_echo··· = curry_variadic(argument_echo);
-  auto [a, b, c, d] =
-      argument_echo···(A{})(B{})(C{})(D{})(tf::call);
-  REQUIRE(a == A{});
-  REQUIRE(b == B{});
-  REQUIRE(c == C{});
-  REQUIRE(d == D{});
-}
-
-D ABC_to_D(A, B, C) { return {}; }
-
-TEST_CASE("C-functions should curry", //
-    "[curry], [variadic], [interface]") {
-
-  auto A_B_C_to_D = curry(ABC_to_D);
-  REQUIRE(A_B_C_to_D(A{})(B{})(C{}) == D{});
 }
 
 struct Foo {
@@ -186,18 +133,6 @@ TEST_CASE(
       decltype(curry(ref_to_a))>::value);
 }
 
-TEST_CASE(
-    "A curried variadic function should preserve the "
-    "lvalue ref-ness of whatever is returned from the "
-    "wrapped function.", //
-    "[curry], [variadic], [interface]") {
-  A a{};
-  auto ref_to_a = [&a](...) -> A & { return a; };
-  REQUIRE(curry_variadic(ref_to_a)(tf::call) == A{});
-  REQUIRE(std::is_lvalue_reference<
-      decltype(curry_variadic(ref_to_a)(tf::call))>::value);
-}
-
 TEST_CASE("Curried functions should…") {
   auto ABtoC = curry([](A, B) -> C { return {}; });
   auto BtoC = ABtoC(A{});
@@ -207,12 +142,6 @@ TEST_CASE("Curried functions should…") {
       "[compose], "
       "[interface]") {
     REQUIRE(compose(BtoC, f)(A{}) == C{});
-  }
-
-  SECTION("… be components of pipeways.",
-      "[curry], [pipe], "
-      "[interface]") {
-    REQUIRE(pipe(A{}, f, BtoC) == C{});
   }
 }
 
@@ -238,42 +167,9 @@ TEST_CASE(
 //   };
 // }
 
-template <typename A, typename F>
-auto vector_map(F f) {
-  return [f](std::vector<A> as) {
-    std::vector<std::invoke_result_t<F, A>> bs;
-    bs.reserve(as.size());
-
-    std::transform(
-        cbegin(as), cend(as), std::back_inserter(bs), f);
-    return bs;
-  };
-}
-
-template <typename A, typename B, typename F>
-auto pair_lmap(F f) {
-  return [f](std::pair<A, B> ab)
-             -> std::pair<std::invoke_result_t<F, A>, B> {
-    auto [a, b] = ab;
-    return {f(a), b};
-  };
-}
-
-template <typename A, typename B, typename F>
-auto pair_rmap(F f) {
-  return [f](std::pair<A, B> ab)
-             -> std::pair<A, std::invoke_result_t<F, B>> {
-    auto [a, b] = ab;
-    return {a, f(b)};
-  };
-}
-
-template <typename A, typename X, typename Y>
-auto chom_map(hom<A, X> f) -> hom<A, Y> {
-  return [f](hom<X, Y> g) { return compose(f, g); };
-}
 // ........................................................ f]]]1
 // Demos of structure in Cpp .............................. f[[[1
+// Basic category axioms .................................. f[[[2
 TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
   REQUIRE(D{} == compose(h, g, f)(A{}));
   REQUIRE(
@@ -287,26 +183,118 @@ TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
   REQUIRE(f(A{}) == compose(id<B>, f)(A{}));
   REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
 }
+// ........................................................ f]]]2
+// std::vector functor with free func and Functor<>. ...... f[[[2
+
+template <typename T>
+using Vector = std::vector<T>;
+
+struct VectorF : public Functor<Vector> {
+  template <typename Fn>
+  static auto fmap(Fn f) {
+    using T = Dom<Fn>;
+    using U = Cod<Fn>;
+    return [f](Vector<T> t_s) {
+      std::vector<U> u_s;
+      u_s.reserve(t_s.size());
+
+      std::transform(
+          cbegin(t_s), cend(t_s), std::back_inserter(u_s), f);
+      return u_s;
+    };
+  };
+};
 
 TEST_CASE(
-    "Given a function f : A → B, map should produce a "
-    "function object that maps f over a vector<A> to "
-    "give a vector<B>") {
-  auto lifted_f = vector_map<A>(f);
-  auto as = std::vector{A{}, A{}, A{}};
-  REQUIRE(lifted_f(as) == std::vector{B{}, B{}, B{}});
+    "Similar to the previous example using fmap on "
+    "std::vector, we can use the Functor<Vector> "
+    "constructed above to achieve the same ends.") {
+
+  auto a_s = std::vector{A{}, A{}, A{}};
+  auto vec_f = VectorF::fmap(f);
+  auto vec_g = VectorF::fmap(g);
+  auto vec_gf = VectorF::fmap<Hom<A, C>>(compose(g, f));
+
+  REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
 }
 
-TEST_CASE("pair_lmap") {
-  auto ac = std::pair<A, C>{{}, {}};
-  auto f_x_id = pair_lmap<A, C>(f);
-  REQUIRE(f_x_id(ac) == std::pair{B{}, C{}});
+template <typename Fn>
+auto vec_fmap(Fn f)
+    -> Hom<std::vector<Dom<Fn>>, std::vector<Cod<Fn>>> {
+  using T = Dom<Fn>;
+  using U = Cod<Fn>;
+  return [f](std::vector<T> t_s) {
+    std::vector<U> u_s;
+    u_s.reserve(t_s.size());
+
+    std::transform(
+        cbegin(t_s), cend(t_s), std::back_inserter(u_s), f);
+    return u_s;
+  };
 }
 
-TEST_CASE("pair_rmap") {
-  auto ab = std::pair<A, B>{{}, {}};
-  auto id_x_g = pair_rmap<A, B>(g);
-  REQUIRE(id_x_g(ab) == std::pair{A{}, C{}});
+TEST_CASE(
+    "Given a function f : A → B and a function template "
+    "fmap, then fmap(f) should should produce a function "
+    "object that maps f over a std::vector<A> to give a "
+    "std::vector<B>") {
+
+  auto a_s = std::vector{A{}, A{}, A{}};
+  auto vec_f = vec_fmap(f);
+  auto vec_g = vec_fmap(g);
+  auto vec_gf = vec_fmap<Hom<A, C>>(compose(g, f));
+
+  REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
 }
+
+
+// ........................................................ f]]]2
+// std::pair functorial on left and right sides. .......... f[[[2
+template <typename F>
+auto pair_lmap(F f) {
+  return [f](auto tu) {
+    auto [t, u] = tu;
+    return std::pair{f(t), u};
+  };
+}
+
+template <typename F>
+auto pair_rmap(F f) {
+  return [f](auto tu) {
+    auto [t, u] = tu;
+    return std::pair{t, f(u)};
+  };
+}
+
+TEST_CASE(
+    "std::pair is functorial in either the left or right "
+    "position.") {
+  GIVEN("A value in std::pair<A, C>") {
+    auto ac = std::pair<A, C>{};
+
+    THEN("pair_lmap(f) should act on the left (A) value.") {
+      auto f_x_id = pair_lmap(f);
+      REQUIRE(f_x_id(ac) == std::pair{B{}, C{}});
+    }
+
+    THEN("pair_lmap(f) should act on the right (C) value.") {
+      auto id_x_h = pair_rmap(h);
+      REQUIRE(id_x_h(ac) == std::pair{A{}, D{}});
+    }
+  }
+}
+// ........................................................ f]]]2
+// covariant hom functor .................................. f[[[2
+template <typename F>
+auto chom_map(F f) {
+  return [f](auto g) { return compose(f, g); };
+}
+
+TEST_CASE("chom_map") {
+  auto hom_A_g = chom_map(g);
+
+  REQUIRE(hom_A_g(f)(A{}) == C{});
+}
+// ........................................................ f]]]2
 
 // ........................................................ f]]]1
