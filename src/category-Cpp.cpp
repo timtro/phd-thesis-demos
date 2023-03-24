@@ -1,6 +1,7 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <catch2/catch.hpp>
 #include <type_traits>
+#include <optional>
 
 #include "test-tools.hpp"
 using tst::A; // Tag for unit type
@@ -25,10 +26,10 @@ template <typename Derived,
     template <typename, typename...> typename TypeCtor>
 struct Functor {
   template <typename T>
-  using F = TypeCtor<T>;
+  using Of = TypeCtor<T>;
 
   template <typename Fn>
-  static auto fmap(Fn f) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+  static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return Derived::fmap(f);
   }
 };
@@ -178,14 +179,15 @@ using IdType = T;
 
 struct Id : public Functor<Id, IdType> {
   template <typename Fn>
-  static auto fmap(Fn fn) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+  static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return fn;
   };
 };
 
 TEST_CASE("Check the functor laws for IdF") {
-
-  auto a = Id::F<A>{};
+//    Alias for tst::A
+//             $↓$
+  auto a = Id::Of<A>{};
   auto IdF_f = Id::fmap(f);
   auto IdF_g = Id::fmap(g);
   auto IdF_gf = Id::fmap<Hom<A, C>>(compose(g, f));
@@ -202,20 +204,69 @@ using ConstT = std::size_t;
 
 struct ConstSizet : public Functor<ConstSizet, ConstT> {
   template <typename Fn>
-  static auto fmap(Fn) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+  static auto fmap(Fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return [](std::size_t x) { return x; };
   };
 };
+// ........................................................ f]]]2
+// Optional functor ....................................... f[[[2
+struct Optional : public Functor<Optional, std::optional> {
+  template <typename Fn>
+  static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+    using T = Dom<Fn>;
+    using U = Cod<Fn>;
+    return [f](Of<T> ot) -> Of<U> {
+      if (ot)
+        return f(ot.value());
+      else
+        return std::nullopt;
+    };
+  }
+};
+
+TEST_CASE("Basic behavioural tests of Optional::fmap"){
+  auto a = Optional::Of<A>{A{}};
+  auto not_a = Optional::Of<A>{};
+
+  auto opt_f = Optional::fmap(f);
+  auto opt_g = Optional::fmap(g);
+
+  auto A_to_nullopt = [](Optional::Of<A>) -> Optional::Of<B> {
+    return std::nullopt;
+  };
+
+  REQUIRE((compose(opt_g, opt_f)(a)).value() == C{});
+  REQUIRE(compose(opt_g, opt_f)(not_a) == std::nullopt);
+  REQUIRE(compose(opt_g, A_to_nullopt)(a) == std::nullopt);
+}
+
+TEST_CASE("Check the functor laws for Optional::fmap") {
+  //        Alias for std::vector<A>
+  //                 $↓$
+  auto a = Optional::Of<A>{A{}};
+  auto not_a = Optional::Of<A>{};
+
+  auto opt_f = Optional::fmap(f);
+  auto opt_g = Optional::fmap(g);
+  auto opt_gf = Optional::fmap<Hom<A, C>>(compose(g, f));
+  auto opt_idA = Optional::fmap<Hom<A, A>>(id<A>);
+
+  REQUIRE(compose(opt_g, opt_f)(a) == opt_gf(a));
+  REQUIRE(opt_idA(a) == id(a));
+
+  REQUIRE(compose(opt_g, opt_f)(not_a) == opt_gf(not_a));
+  REQUIRE(opt_idA(not_a) == id(not_a));
+}
 // ........................................................ f]]]2
 // std::vector based List-functor ......................... f[[[2
 
 struct Vector : public Functor<Vector, std::vector> {
   template <typename Fn>
-  static auto fmap(Fn f) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+  static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
     using U = Cod<Fn>;
-    return [f](F<T> t_s) {
-      F<U> u_s;
+    return [f](Of<T> t_s) {
+      Of<U> u_s;
       u_s.reserve(t_s.size());
 
       std::transform(
@@ -228,7 +279,7 @@ struct Vector : public Functor<Vector, std::vector> {
 TEST_CASE("Check the functor laws for Vector::fmap") {
   //        Alias for std::vector<A>
   //                 $↓$
-  auto a_s = Vector::F<A>{A{}, A{}, A{}};
+  auto a_s = Vector::Of<A>{A{}, A{}, A{}};
   auto vec_f = Vector::fmap(f);
   auto vec_g = Vector::fmap(g);
   auto vec_gf = Vector::fmap<Hom<A, C>>(compose(g, f));
@@ -294,16 +345,16 @@ struct NaturalTransformation {
 };
 
 struct len
-    : public NaturalTransformation<Vector::F, ConstSizet::F> {
+    : public NaturalTransformation<Vector::Of, ConstSizet::Of> {
   template <typename T>
-  static std::size_t transform(Vector::F<T> t_s) {
+  static std::size_t transform(Vector::Of<T> t_s) {
     return t_s.size();
   }
 };
 
 TEST_CASE("Test naturality square for len.") {
   constexpr int actual_length = 5;
-  auto a_s = Vector::F<A>(actual_length);
+  auto a_s = Vector::Of<A>(actual_length);
   REQUIRE(compose(len::transform<B>, Vector::fmap(f))(a_s) ==
           actual_length);
   REQUIRE(compose(ConstSizet::fmap(f), len::transform<A>)(a_s) ==
