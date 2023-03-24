@@ -36,14 +36,14 @@ namespace tf {
         Ret (F::*)(Arg1, Rest...) const);
 
     template <typename F>
-    struct first_argument {
+    struct first_parameter {
       using type =
           decltype(function_signature_helper(&F::operator()));
     };
   } // namespace impl
 
   template <typename F>
-  using Dom = typename impl::first_argument<F>::type;
+  using Dom = typename impl::first_parameter<F>::type;
 
   template <typename F>
   using Cod = typename std::invoke_result_t<F, Dom<F>>;

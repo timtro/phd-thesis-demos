@@ -21,13 +21,16 @@ using tf::Doms;
 using tf::Hom;
 using tf::id;
 
-template <template <typename> typename F>
+template <typename Derived,
+    template <typename, typename...> typename TypeCtor>
 struct Functor {
-  template <typename X>
-  using omap = F<X>;
+  template <typename T>
+  using F = TypeCtor<T>;
 
   template <typename Fn>
-  static auto fmap(Fn) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>>;
+  static auto fmap(Fn f) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+    return Derived::fmap(f);
+  }
 };
 
 // tfunc test cases ....................................... f[[[1
@@ -153,21 +156,6 @@ TEST_CASE(
   REQUIRE(increment(0) == 1);
 }
 // ........................................................ f]]]1
-// Cpp structures ......................................... f[[[1
-// map : (A → B) → (vector<A> → vector<B>)
-// template <typename A, typename B>
-// auto vec_map(std::function<B(A)> f) {
-//   return [f](std::vector<A> as) -> std::vector<B> {
-//     std::vector<B> bs;
-//     bs.reserve(as.size());
-//
-//     std::transform(
-//         cbegin(as), cend(as), std::back_inserter(bs), f);
-//     return bs;
-//   };
-// }
-
-// ........................................................ f]]]1
 // Demos of structure in Cpp .............................. f[[[1
 // Basic category axioms .................................. f[[[2
 TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
@@ -184,18 +172,50 @@ TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
   REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
 }
 // ........................................................ f]]]2
-// std::vector functor with free func and Functor<>. ...... f[[[2
-
+// Identity functor ....................................... f[[[2
 template <typename T>
-using Vector = std::vector<T>;
+using IdType = T;
 
-struct VectorF : public Functor<Vector> {
+struct Id : public Functor<Id, IdType> {
   template <typename Fn>
-  static auto fmap(Fn f) {
+  static auto fmap(Fn fn) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+    return fn;
+  };
+};
+
+TEST_CASE("Check the functor laws for IdF") {
+
+  auto a = Id::F<A>{};
+  auto IdF_f = Id::fmap(f);
+  auto IdF_g = Id::fmap(g);
+  auto IdF_gf = Id::fmap<Hom<A, C>>(compose(g, f));
+  auto IdF_idA = Id::fmap<Hom<A, A>>(id<A>);
+
+  REQUIRE(compose(IdF_g, IdF_f)(a) == IdF_gf(a));
+  REQUIRE(IdF_idA(a) == id(a));
+}
+// ........................................................ f]]]2
+// Constant functor ....................................... f[[[2
+
+template <typename>
+using ConstT = std::size_t;
+
+struct ConstSizet : public Functor<ConstSizet, ConstT> {
+  template <typename Fn>
+  static auto fmap(Fn) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
+    return [](std::size_t x) { return x; };
+  };
+};
+// ........................................................ f]]]2
+// std::vector based List-functor ......................... f[[[2
+
+struct Vector : public Functor<Vector, std::vector> {
+  template <typename Fn>
+  static auto fmap(Fn f) -> Hom<F<Dom<Fn>>, F<Cod<Fn>>> {
     using T = Dom<Fn>;
     using U = Cod<Fn>;
-    return [f](Vector<T> t_s) {
-      std::vector<U> u_s;
+    return [f](F<T> t_s) {
+      F<U> u_s;
       u_s.reserve(t_s.size());
 
       std::transform(
@@ -205,49 +225,18 @@ struct VectorF : public Functor<Vector> {
   };
 };
 
-TEST_CASE(
-    "Similar to the previous example using fmap on "
-    "std::vector, we can use the Functor<Vector> "
-    "constructed above to achieve the same ends.") {
-
-  auto a_s = std::vector{A{}, A{}, A{}};
-  auto vec_f = VectorF::fmap(f);
-  auto vec_g = VectorF::fmap(g);
-  auto vec_gf = VectorF::fmap<Hom<A, C>>(compose(g, f));
-
-  REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
-}
-
-template <typename Fn>
-auto vec_fmap(Fn f)
-    -> Hom<std::vector<Dom<Fn>>, std::vector<Cod<Fn>>> {
-  using T = Dom<Fn>;
-  using U = Cod<Fn>;
-  return [f](std::vector<T> t_s) {
-    std::vector<U> u_s;
-    u_s.reserve(t_s.size());
-
-    std::transform(
-        cbegin(t_s), cend(t_s), std::back_inserter(u_s), f);
-    return u_s;
-  };
-}
-
-TEST_CASE(
-    "Given a function f : A → B and a function template "
-    "fmap, then fmap(f) should should produce a function "
-    "object that maps f over a std::vector<A> to give a "
-    "std::vector<B>") {
-
-  auto a_s = std::vector{A{}, A{}, A{}};
-  auto vec_f = vec_fmap(f);
-  auto vec_g = vec_fmap(g);
-  auto vec_gf = vec_fmap<Hom<A, C>>(compose(g, f));
+TEST_CASE("Check the functor laws for Vector::fmap") {
+  //        Alias for std::vector<A>
+  //                 $↓$
+  auto a_s = Vector::F<A>{A{}, A{}, A{}};
+  auto vec_f = Vector::fmap(f);
+  auto vec_g = Vector::fmap(g);
+  auto vec_gf = Vector::fmap<Hom<A, C>>(compose(g, f));
+  auto vec_idA = Vector::fmap<Hom<A, A>>(id<A>);
 
   REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
+  REQUIRE(vec_idA(a_s) == id(a_s));
 }
-
-
 // ........................................................ f]]]2
 // std::pair functorial on left and right sides. .......... f[[[2
 template <typename F>
@@ -296,5 +285,29 @@ TEST_CASE("chom_map") {
   REQUIRE(hom_A_g(f)(A{}) == C{});
 }
 // ........................................................ f]]]2
+// Natural Transformations ................................ f[[[2
+template <template <typename> typename F,
+    template <typename> typename G>
+struct NaturalTransformation {
+  template <typename T>
+  static auto transform(F<T> fa) -> G<T>;
+};
 
+struct len
+    : public NaturalTransformation<Vector::F, ConstSizet::F> {
+  template <typename T>
+  static std::size_t transform(Vector::F<T> t_s) {
+    return t_s.size();
+  }
+};
+
+TEST_CASE("Test naturality square for len.") {
+  constexpr int actual_length = 5;
+  auto a_s = Vector::F<A>(actual_length);
+  REQUIRE(compose(len::transform<B>, Vector::fmap(f))(a_s) ==
+          actual_length);
+  REQUIRE(compose(ConstSizet::fmap(f), len::transform<A>)(a_s) ==
+          actual_length);
+}
+// ........................................................ f]]]2
 // ........................................................ f]]]1
