@@ -299,18 +299,19 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
   //                 $↓$
   auto a_s = Vector::Of<A>{A{}, A{}, A{}};
 
-  // vec_f : $\FOf{\ttF}{\ttA} → \FOf{\ttF}{\ttB}$
+  // $\FOf{\ttF}{\ttA} → \FOf{\ttF}{\ttB}$
   auto vec_f = Vector::fmap(f);
 
-  // vec_g : $\FOf{\ttF}{\ttB} → \FOf{\ttF}{\ttC}$
+  // $\FOf{\ttF}{\ttB} → \FOf{\ttF}{\ttC}$
   auto vec_g = Vector::fmap(g);
 
-  // vec_gf : $\ttF∷$Of<A> $→$ 𝘍$∷$Of<C>
+  // $\FOf{\ttF}{\ttA} → \FOf{\ttF}{\ttC}$
   auto vec_gf = Vector::fmap<Hom<A, C>>(compose(g, f));
 
+  // $\Ffmap{\ttF}(\ttg) ∘ \Ffmap{\ttF}(\ttf) =  \Ffmap{\ttF}(\ttg ∘ \ttf)$
   REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
 
-  // vec_id- : 𝘍$∷$Of<-> $→$ 𝘍$∷$Of<->
+  // vec_id$-$ : $\FOf{\ttF}{-} → \FOf{\ttF}{-}$
   auto vec_idA = Vector::fmap<Hom<A, A>>(id<A>);
   auto vec_idB = Vector::fmap<Hom<B, B>>(id<B>);
   auto vec_idC = Vector::fmap<Hom<C, C>>(id<C>);
@@ -342,22 +343,51 @@ struct Pair : public Bifunctor<Pair, std::pair> {
   }
 };
 
-TEST_CASE("std::pair is functorial in either the left or right "
-          "position.") {
-  GIVEN("A value in std::pair<A, C>") {
-    auto ac = Pair::Of<A, C>{};
+TEST_CASE("std::pair is functorial in the left position.") {
 
-    THEN("pair_lmap(f) should act on the left (A) value.") {
-      auto f_x_id = Pair::lmap(f);
-      REQUIRE(f_x_id(ac) == std::pair{B{}, C{}});
-    }
+  auto ac = Pair::Of<A, C>{};
 
-    THEN("pair_lmap(f) should act on the right (C) value.") {
-      auto id_x_h = Pair::rmap(h);
-      REQUIRE(id_x_h(ac) == std::pair{A{}, D{}});
-    }
-  }
+  auto l_f = Pair::lmap(f);
+  auto l_g = Pair::lmap(g);
+  auto l_gf = Pair::lmap<Hom<A, C>>(compose(g, f));
+
+  REQUIRE(compose(l_g, l_f)(ac) == l_gf(ac));
+
+  auto l_idA = Pair::lmap<Hom<A, A>>(id<A>);
+  auto l_idB = Pair::lmap<Hom<B, B>>(id<B>);
+  auto l_idC = Pair::lmap<Hom<C, C>>(id<C>);
+
+  auto bc = l_f(ac);
+  auto cc = l_g(bc);
+
+  REQUIRE(l_idA(ac) == id(ac));
+  REQUIRE(l_idB(bc) == id(bc));
+  REQUIRE(l_idC(cc) == id(cc));
 }
+
+TEST_CASE("std::pair is functorial in the right position.") {
+
+  auto ca = Pair::Of<C, A>{};
+
+  auto r_f = Pair::rmap(f);
+  auto r_g = Pair::rmap(g);
+
+  auto r_gf = Pair::rmap<Hom<A, C>>(compose(g, f));
+
+  REQUIRE(compose(r_g, r_f)(ca) == r_gf(ca));
+
+  auto r_idA = Pair::rmap<Hom<A, A>>(id<A>);
+  auto r_idB = Pair::rmap<Hom<B, B>>(id<B>);
+  auto r_idC = Pair::rmap<Hom<C, C>>(id<C>);
+
+  auto cb = r_f(ca);
+  auto cc = r_g(cb);
+
+  REQUIRE(r_idA(ca) == id(ca));
+  REQUIRE(r_idB(cb) == id(cb));
+  REQUIRE(r_idC(cc) == id(cc));
+}
+
 // ........................................................ f]]]2
 // covariant hom functor .................................. f[[[2
 
