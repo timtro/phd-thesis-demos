@@ -1,7 +1,7 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <catch2/catch.hpp>
-#include <type_traits>
 #include <optional>
+#include <type_traits>
 
 #include "test-tools.hpp"
 using tst::A; // Tag for unit type
@@ -31,6 +31,25 @@ struct Functor {
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return Derived::fmap(f);
+  }
+};
+
+template <typename Derived,
+    template <typename, typename...> typename TypeCtor>
+struct Bifunctor {
+  template <typename L, typename R>
+  using Of = TypeCtor<L, R>;
+
+  // template <> static auto lmap -> -> Hom<Of<Dom<Fn>, R>,
+  // Of<Cod<Fn>, R>>
+  template <typename Fn>
+  static auto lmap(Fn f) {
+    return Derived::lmap(f);
+  }
+
+  template <typename Fn>
+  static auto rmap(Fn f) {
+    return Derived::rmap(f);
   }
 };
 
@@ -185,8 +204,8 @@ struct Id : public Functor<Id, IdType> {
 };
 
 TEST_CASE("Check the functor laws for IdF") {
-//    Alias for tst::A
-//             $↓$
+  //    Alias for tst::A
+  //             $↓$
   auto a = Id::Of<A>{};
   auto IdF_f = Id::fmap(f);
   auto IdF_g = Id::fmap(g);
@@ -224,7 +243,7 @@ struct Optional : public Functor<Optional, std::optional> {
   }
 };
 
-TEST_CASE("Basic behavioural tests of Optional::fmap"){
+TEST_CASE("Basic behavioural tests of Optional::fmap") {
   auto a = Optional::Of<A>{A{}};
   auto not_a = Optional::Of<A>{};
 
@@ -259,7 +278,6 @@ TEST_CASE("Check the functor laws for Optional::fmap") {
 }
 // ........................................................ f]]]2
 // std::vector based List-functor ......................... f[[[2
-
 struct Vector : public Functor<Vector, std::vector> {
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
@@ -277,61 +295,89 @@ struct Vector : public Functor<Vector, std::vector> {
 };
 
 TEST_CASE("Check the functor laws for Vector::fmap") {
-  //        Alias for std::vector<A>
+  //        Alias for std$∷$vector<A>
   //                 $↓$
   auto a_s = Vector::Of<A>{A{}, A{}, A{}};
+
+  // vec_f : $\FOf{\ttF}{\ttA} → \FOf{\ttF}{\ttB}$
   auto vec_f = Vector::fmap(f);
+
+  // vec_g : $\FOf{\ttF}{\ttB} → \FOf{\ttF}{\ttC}$
   auto vec_g = Vector::fmap(g);
+
+  // vec_gf : $\ttF∷$Of<A> $→$ 𝘍$∷$Of<C>
   auto vec_gf = Vector::fmap<Hom<A, C>>(compose(g, f));
-  auto vec_idA = Vector::fmap<Hom<A, A>>(id<A>);
 
   REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
+
+  // vec_id- : 𝘍$∷$Of<-> $→$ 𝘍$∷$Of<->
+  auto vec_idA = Vector::fmap<Hom<A, A>>(id<A>);
+  auto vec_idB = Vector::fmap<Hom<B, B>>(id<B>);
+  auto vec_idC = Vector::fmap<Hom<C, C>>(id<C>);
+
+  auto b_s = vec_f(a_s);
+  auto c_s = vec_g(b_s);
+
   REQUIRE(vec_idA(a_s) == id(a_s));
+  REQUIRE(vec_idB(b_s) == id(b_s));
+  REQUIRE(vec_idC(c_s) == id(c_s));
 }
 // ........................................................ f]]]2
-// std::pair functorial on left and right sides. .......... f[[[2
-template <typename F>
-auto pair_lmap(F f) {
-  return [f](auto tu) {
-    auto [t, u] = tu;
-    return std::pair{f(t), u};
-  };
-}
+// std::pair Bifuctor for left and right sides ............ f[[[2
+struct Pair : public Bifunctor<Pair, std::pair> {
+  template <typename Fn>
+  static auto lmap(Fn f) {
+    return [f](auto tu) {
+      auto [t, u] = tu;
+      return std::pair{f(t), u};
+    };
+  }
 
-template <typename F>
-auto pair_rmap(F f) {
-  return [f](auto tu) {
-    auto [t, u] = tu;
-    return std::pair{t, f(u)};
-  };
-}
+  template <typename Fn>
+  static auto rmap(Fn f) {
+    return [f](auto tu) {
+      auto [t, u] = tu;
+      return std::pair{t, f(u)};
+    };
+  }
+};
 
-TEST_CASE(
-    "std::pair is functorial in either the left or right "
-    "position.") {
+TEST_CASE("std::pair is functorial in either the left or right "
+          "position.") {
   GIVEN("A value in std::pair<A, C>") {
-    auto ac = std::pair<A, C>{};
+    auto ac = Pair::Of<A, C>{};
 
     THEN("pair_lmap(f) should act on the left (A) value.") {
-      auto f_x_id = pair_lmap(f);
+      auto f_x_id = Pair::lmap(f);
       REQUIRE(f_x_id(ac) == std::pair{B{}, C{}});
     }
 
     THEN("pair_lmap(f) should act on the right (C) value.") {
-      auto id_x_h = pair_rmap(h);
+      auto id_x_h = Pair::rmap(h);
       REQUIRE(id_x_h(ac) == std::pair{A{}, D{}});
     }
   }
 }
 // ........................................................ f]]]2
 // covariant hom functor .................................. f[[[2
-template <typename F>
-auto chom_map(F f) {
-  return [f](auto g) { return compose(f, g); };
-}
 
-TEST_CASE("chom_map") {
-  auto hom_A_g = chom_map(g);
+template <typename T>
+struct HomFrom {
+  template <typename U>
+  using HomTo = Hom<T, U>;
+};
+
+template <typename T>
+struct CHom
+    : public Functor<CHom<T>, HomFrom<T>::template HomTo> {
+  template <typename Fn>
+  static auto fmap(Fn f) {
+    return [f](auto g) { return compose(f, g); };
+  };
+};
+
+TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
+  auto hom_A_g = CHom<B>::fmap(g);
 
   REQUIRE(hom_A_g(f)(A{}) == C{});
 }
