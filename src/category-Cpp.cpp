@@ -308,7 +308,8 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
   // $\FOf{\ttF}{\ttA} → \FOf{\ttF}{\ttC}$
   auto vec_gf = Vector::fmap<Hom<A, C>>(compose(g, f));
 
-  // $\Ffmap{\ttF}(\ttg) ∘ \Ffmap{\ttF}(\ttf) =  \Ffmap{\ttF}(\ttg ∘ \ttf)$
+  // $\Ffmap{\ttF}(\ttg) ∘ \Ffmap{\ttF}(\ttf) = \Ffmap{\ttF}(\ttg
+  // ∘ \ttf)$
   REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
 
   // vec_id$-$ : $\FOf{\ttF}{-} → \FOf{\ttF}{-}$
@@ -401,15 +402,34 @@ template <typename T>
 struct CHom
     : public Functor<CHom<T>, HomFrom<T>::template HomTo> {
   template <typename Fn>
-  static auto fmap(Fn f) {
+  static auto fmap(Fn f) -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
     return [f](auto g) { return compose(f, g); };
   };
 };
 
 TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
-  auto hom_A_g = CHom<B>::fmap(g);
 
-  REQUIRE(hom_A_g(f)(A{}) == C{});
+  // $\FOf{\ttName{CHom}}{\ttA} → \FOf{\ttName{CHom}}{\ttB}$
+  auto homA_f = CHom<A>::fmap(f);
+
+  // $\FOf{\ttName{CHom}}{\ttB} → \FOf{\ttName{CHom}}{\ttC}$
+  auto homA_g = CHom<A>::fmap(g);
+
+  // $\FOf{\ttName{CHom}}{\ttA} → \FOf{\ttName{CHom}}{\ttC}$
+  auto homA_gf = CHom<A>::fmap<Hom<A, C>>(compose(g, f));
+
+  // $\Ffmap{\ttName{Chom}}(\ttg) ∘ \Ffmap{\ttName{CHom}}(\ttf) = \Ffmap{\ttName{CHom}}(\ttg ∘ \ttf)$
+  REQUIRE(homA_gf(id<A>)(A{}) ==
+          compose(homA_g, homA_f)(id<A>)(A{}));
+
+  auto homA_idA = CHom<A>::fmap<Hom<A,A>>(id<A>);
+  auto homA_idB = CHom<A>::fmap<Hom<B,B>>(id<B>);
+  auto homA_idC = CHom<A>::fmap<Hom<C,C>>(id<C>);
+  auto gf = compose(g, f);
+
+  REQUIRE(homA_idA(id<A>)(A{}) == id<A>(A{}));
+  REQUIRE(homA_idB(f)(A{}) == f(A{}));
+  REQUIRE(homA_idC(gf)(A{}) == gf(A{}));
 }
 // ........................................................ f]]]2
 // Natural Transformations ................................ f[[[2
