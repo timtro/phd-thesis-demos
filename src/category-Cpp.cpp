@@ -178,6 +178,7 @@ TEST_CASE(
 // ........................................................ f]]]1
 // Demos of structure in Cpp .............................. f[[[1
 // Basic category axioms .................................. f[[[2
+
 TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
   REQUIRE(D{} == compose(h, g, f)(A{}));
   REQUIRE(
@@ -191,6 +192,7 @@ TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
   REQUIRE(f(A{}) == compose(id<B>, f)(A{}));
   REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
 }
+
 // ........................................................ f]]]2
 // Identity functor ....................................... f[[[2
 template <typename T>
@@ -216,19 +218,8 @@ TEST_CASE("Check the functor laws for IdF") {
   REQUIRE(IdF_idA(a) == id(a));
 }
 // ........................................................ f]]]2
-// Constant functor ....................................... f[[[2
-
-template <typename>
-using ConstT = std::size_t;
-
-struct ConstSizet : public Functor<ConstSizet, ConstT> {
-  template <typename Fn>
-  static auto fmap(Fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
-    return [](std::size_t x) { return x; };
-  };
-};
-// ........................................................ f]]]2
 // Optional functor ....................................... f[[[2
+
 struct Optional : public Functor<Optional, std::optional> {
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
@@ -276,8 +267,10 @@ TEST_CASE("Check the functor laws for Optional::fmap") {
   REQUIRE(compose(opt_g, opt_f)(not_a) == opt_gf(not_a));
   REQUIRE(opt_idA(not_a) == id(not_a));
 }
+
 // ........................................................ f]]]2
 // std::vector based List-functor ......................... f[[[2
+
 struct Vector : public Functor<Vector, std::vector> {
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
@@ -324,6 +317,7 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
   REQUIRE(vec_idB(b_s) == id(b_s));
   REQUIRE(vec_idC(c_s) == id(c_s));
 }
+
 // ........................................................ f]]]2
 // std::pair Bifuctor for left and right sides ............ f[[[2
 struct Pair : public Bifunctor<Pair, std::pair> {
@@ -402,7 +396,8 @@ template <typename T>
 struct CHom
     : public Functor<CHom<T>, HomFrom<T>::template HomTo> {
   template <typename Fn>
-  static auto fmap(Fn f) -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
+  static auto fmap(Fn f)
+      -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
     return [f](auto g) { return compose(f, g); };
   };
 };
@@ -418,13 +413,14 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
   // $\FOf{\ttName{CHom}}{\ttA} → \FOf{\ttName{CHom}}{\ttC}$
   auto homA_gf = CHom<A>::fmap<Hom<A, C>>(compose(g, f));
 
-  // $\Ffmap{\ttName{Chom}}(\ttg) ∘ \Ffmap{\ttName{CHom}}(\ttf) = \Ffmap{\ttName{CHom}}(\ttg ∘ \ttf)$
+  // $\Ffmap{\ttName{Chom}}(\ttg) ∘ \Ffmap{\ttName{CHom}}(\ttf) =
+  // \Ffmap{\ttName{CHom}}(\ttg ∘ \ttf)$
   REQUIRE(homA_gf(id<A>)(A{}) ==
           compose(homA_g, homA_f)(id<A>)(A{}));
 
-  auto homA_idA = CHom<A>::fmap<Hom<A,A>>(id<A>);
-  auto homA_idB = CHom<A>::fmap<Hom<B,B>>(id<B>);
-  auto homA_idC = CHom<A>::fmap<Hom<C,C>>(id<C>);
+  auto homA_idA = CHom<A>::fmap<Hom<A, A>>(id<A>);
+  auto homA_idB = CHom<A>::fmap<Hom<B, B>>(id<B>);
+  auto homA_idC = CHom<A>::fmap<Hom<C, C>>(id<C>);
   auto gf = compose(g, f);
 
   REQUIRE(homA_idA(id<A>)(A{}) == id<A>(A{}));
@@ -432,29 +428,79 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
   REQUIRE(homA_idC(gf)(A{}) == gf(A{}));
 }
 // ........................................................ f]]]2
-// Natural Transformations ................................ f[[[2
-template <template <typename> typename F,
-    template <typename> typename G>
-struct NaturalTransformation {
-  template <typename T>
-  static auto transform(F<T> fa) -> G<T>;
+// Constant functor ....................................... f[[[2
+
+template <typename T>
+struct Always {
+  template <typename>
+  using given = T;
 };
 
-struct len
-    : public NaturalTransformation<Vector::Of, ConstSizet::Of> {
+template <typename T>
+struct Const
+    : public Functor<Const<T>, Always<T>::template given> {
+  template <typename Fn>
+  static auto fmap(Fn) -> Hom<T, T> {
+    return id<T>;
+  };
+};
+
+TEST_CASE("Functor axioms of Constant functor.") {
+
+  auto const_f = Const<A>::fmap(f);
+  auto const_g = Const<A>::fmap(g);
+  auto const_gf = Const<A>::fmap(compose(g, f));
+  REQUIRE(const_gf(A{}) == compose(const_g, const_f)(A{}));
+
+  auto const_idA = Const<A>::fmap(id<A>);
+  auto const_idB = Const<A>::fmap(id<B>);
+  auto const_idC = Const<A>::fmap(id<C>);
+
+  REQUIRE(const_idA(A{}) == A{});
+  REQUIRE(const_idB(A{}) == A{});
+  REQUIRE(const_idB(A{}) == A{});
+}
+
+// ........................................................ f]]]2
+// Natural Transformations ................................ f[[[2
+
+template <typename Derived, typename DomFtor, typename CodFtor>
+struct NaturalTransform {
   template <typename T>
-  static std::size_t transform(Vector::Of<T> t_s) {
+  using F = typename DomFtor::template Of<T>;
+
+  template <typename T>
+  using G = typename CodFtor::template Of<T>;
+
+  template <typename T>
+  static auto transform(F<T> ft) -> G<T> {
+    return Derived::transform(ft);
+  }
+};
+
+struct len //               len : Vector $⇒$ Const<std::size_t>
+    : public NaturalTransform<len, Vector, Const<std::size_t>> {
+
+  // F = Vector; G = Const<size_t>
+  template <typename T>
+  static auto transform(F<T> t_s) -> G<T> {
     return t_s.size();
   }
 };
 
 TEST_CASE("Test naturality square for len.") {
-  constexpr int actual_length = 5;
+  constexpr std::size_t actual_length = 5;
+
   auto a_s = Vector::Of<A>(actual_length);
+
+  REQUIRE(len::transform(a_s) == actual_length);
+
   REQUIRE(compose(len::transform<B>, Vector::fmap(f))(a_s) ==
           actual_length);
-  REQUIRE(compose(ConstSizet::fmap(f), len::transform<A>)(a_s) ==
-          actual_length);
+  REQUIRE(
+      compose(Const<uint>::fmap(f), len::transform<A>)(a_s) ==
+      actual_length);
 }
+
 // ........................................................ f]]]2
 // ........................................................ f]]]1
