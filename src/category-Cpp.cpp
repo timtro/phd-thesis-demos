@@ -40,8 +40,6 @@ struct Bifunctor {
   template <typename L, typename R>
   using Of = TypeCtor<L, R>;
 
-  // template <> static auto lmap -> -> Hom<Of<Dom<Fn>, R>,
-  // Of<Cod<Fn>, R>>
   template <typename Fn>
   static auto lmap(Fn f) {
     return Derived::lmap(f);
@@ -445,61 +443,36 @@ struct Const
   };
 };
 
-TEST_CASE("Functor axioms of Constant functor.") {
+TEST_CASE("Functor axioms of Const<A>.") {
+  auto constA_f = Const<A>::fmap(f);
+  auto constA_g = Const<A>::fmap(g);
+  auto constA_gf = Const<A>::fmap(compose(g, f));
+  REQUIRE(constA_gf(A{}) == compose(constA_g, constA_f)(A{}));
 
-  auto const_f = Const<A>::fmap(f);
-  auto const_g = Const<A>::fmap(g);
-  auto const_gf = Const<A>::fmap(compose(g, f));
-  REQUIRE(const_gf(A{}) == compose(const_g, const_f)(A{}));
-
-  auto const_idA = Const<A>::fmap(id<A>);
-  auto const_idB = Const<A>::fmap(id<B>);
-  auto const_idC = Const<A>::fmap(id<C>);
-
-  REQUIRE(const_idA(A{}) == A{});
-  REQUIRE(const_idB(A{}) == A{});
-  REQUIRE(const_idB(A{}) == A{});
+  REQUIRE(Const<A>::fmap(id<A>)(A{}) == A{});
+  REQUIRE(Const<A>::fmap(id<B>)(A{}) == A{});
+  REQUIRE(Const<A>::fmap(id<C>)(A{}) == A{});
 }
 
 // ........................................................ f]]]2
 // Natural Transformations ................................ f[[[2
 
-template <typename Derived, typename DomFtor, typename CodFtor>
-struct NaturalTransform {
-  template <typename T>
-  using F = typename DomFtor::template Of<T>;
-
-  template <typename T>
-  using G = typename CodFtor::template Of<T>;
-
-  template <typename T>
-  static auto transform(F<T> ft) -> G<T> {
-    return Derived::transform(ft);
-  }
-};
-
-struct len //               len : Vector $⇒$ Const<std::size_t>
-    : public NaturalTransform<len, Vector, Const<std::size_t>> {
-
-  // F = Vector; G = Const<size_t>
-  template <typename T>
-  static auto transform(F<T> t_s) -> G<T> {
-    return t_s.size();
-  }
-};
+template <typename T>
+auto len(Vector::Of<T> t_s) -> Const<std::size_t>::Of<T> {
+  return t_s.size();
+}
 
 TEST_CASE("Test naturality square for len.") {
   constexpr std::size_t actual_length = 5;
 
   auto a_s = Vector::Of<A>(actual_length);
 
-  REQUIRE(len::transform(a_s) == actual_length);
+  // Does what it is supposed to:
+  REQUIRE(len(a_s) == actual_length);
 
-  REQUIRE(compose(len::transform<B>, Vector::fmap(f))(a_s) ==
-          actual_length);
-  REQUIRE(
-      compose(Const<uint>::fmap(f), len::transform<A>)(a_s) ==
-      actual_length);
+  // Satisfies the naturality square:
+  REQUIRE(compose(len<B>, Vector::fmap(f))(a_s) ==
+          compose(Const<uint>::fmap(f), len<A>)(a_s));
 }
 
 // ........................................................ f]]]2
