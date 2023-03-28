@@ -21,6 +21,8 @@ using tf::Dom;
 using tf::Doms;
 using tf::Hom;
 using tf::id;
+using tf::fanout;
+using tf::fanin;
 
 template <typename Derived,
     template <typename, typename...> typename TypeCtor>
@@ -473,6 +475,29 @@ TEST_CASE("Test naturality square for len.") {
   // Satisfies the naturality square:
   REQUIRE(compose(len<B>, Vector::fmap(f))(a_s) ==
           compose(Const<uint>::fmap(f), len<A>)(a_s));
+}
+
+// ........................................................ f]]]2
+// Fanin and fanout ....................................... f[[[2
+
+TEST_CASE("fanout as expected") {
+  auto A_to_B = [](A){return B{};};
+  auto A_to_C = [](A){return C{};};
+
+  REQUIRE(fanout(A_to_B, A_to_C)(A{}) == std::pair{B{}, C{}});
+}
+
+TEST_CASE("fanin as expected") {
+  auto A_to_bool = [](A){return true;};
+  auto B_to_bool = [](B){return false;};
+
+  auto really_a = std::variant<A,B>{A{}};
+  auto really_b = std::variant<A,B>{B{}};
+
+  auto AorB_to_bool = fanin(A_to_bool, B_to_bool);
+
+  REQUIRE(AorB_to_bool(really_a) == true);
+  REQUIRE(AorB_to_bool(really_b) == false);
 }
 
 // ........................................................ f]]]2

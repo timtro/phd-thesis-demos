@@ -7,6 +7,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <variant>
+
 using std::experimental::is_detected_v;
 
 namespace tf {
@@ -83,5 +85,37 @@ namespace tf {
             });
       };
   }
+// ........................................................ f]]]1
+// Fan-out/in ............................................. f[[[1
+template<typename F, typename G>
+auto fanout(F f, G g) -> Hom<Dom<F>, std::pair<Cod<F>, Cod<G>>> {
+  using T = Dom<F>;
+  using U = Cod<F>;
+  using V = Cod<G>;
+
+  static_assert(std::is_same_v<T, Dom<G>>);
+
+  return [f, g](T t) -> std::pair<U, V> {
+    return {f(t), g(t)};
+  };
+}
+
+template<typename F, typename G>
+auto fanin(F f, G g) -> Hom<std::variant<Dom<F>, Dom<G>>, Cod<F>> {
+  using T = Dom<F>;
+  using U = Dom<G>;
+  using X = Cod<F>;
+  using Y = Cod<G>;
+  using TorU = std::variant<T, U>;
+
+  static_assert(std::is_same_v<X, Y>);
+
+  return [f, g](TorU t_or_u) -> X {
+    if (std::holds_alternative<T>(t_or_u))
+      return std::invoke(f, std::get<T>(t_or_u));
+    else
+      return std::invoke(g, std::get<U>(t_or_u));
+  };
+}
 // ........................................................ f]]]1
 } // namespace tf
