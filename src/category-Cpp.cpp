@@ -2,6 +2,7 @@
 #include <catch2/catch.hpp>
 #include <optional>
 #include <type_traits>
+#include <variant>
 
 #include "test-tools.hpp"
 using tst::A; // Tag for unit type
@@ -21,8 +22,10 @@ using tf::Dom;
 using tf::Doms;
 using tf::Hom;
 using tf::id;
+using tf::prod;
 using tf::fanout;
 using tf::fanin;
+using tf::coprod;
 
 template <typename Derived,
     template <typename, typename...> typename TypeCtor>
@@ -500,5 +503,15 @@ TEST_CASE("fanin as expected") {
   REQUIRE(AorB_to_bool(really_b) == false);
 }
 
+// ........................................................ f]]]2
+// Prod and Coprod of functions ........................... f[[[2
+TEST_CASE("Product of functions as expected"){
+  REQUIRE(prod(f, h)(std::pair<A, C>{}) == std::pair<B, D>{});
+}
+
+TEST_CASE("Coproduct of functions as expected"){
+  REQUIRE( std::holds_alternative<B>(coprod(f, h)(A{})) );
+  REQUIRE( std::holds_alternative<D>(coprod(f, h)(C{})) );
+}
 // ........................................................ f]]]2
 // ........................................................ f]]]1

@@ -101,6 +101,18 @@ auto fanout(F f, G g) -> Hom<Dom<F>, std::pair<Cod<F>, Cod<G>>> {
 }
 
 template<typename F, typename G>
+auto prod(F f, G g)
+    -> Hom<std::pair<Dom<F>, Dom<G>>, std::pair<Cod<F>, Cod<G>>> {
+  using TandU = std::pair<Dom<F>, Dom<G>>;
+  using XandY = std::pair<Cod<F>, Cod<G>>;
+
+  return [f, g](TandU tu) -> XandY {
+    auto [t, u] = tu;
+    return {f(t), g(u)};
+  };
+}
+
+template<typename F, typename G>
 auto fanin(F f, G g) -> Hom<std::variant<Dom<F>, Dom<G>>, Cod<F>> {
   using T = Dom<F>;
   using U = Dom<G>;
@@ -117,5 +129,25 @@ auto fanin(F f, G g) -> Hom<std::variant<Dom<F>, Dom<G>>, Cod<F>> {
       return std::invoke(g, std::get<U>(t_or_u));
   };
 }
+
+// ((A → B), (C → D)) → (A + C → B + D)
+template<typename F, typename G>
+auto coprod(F f, G g)
+    -> Hom<std::variant<Dom<F>, Dom<G>>, std::variant<Cod<F>, Cod<G>>> {
+  using T = Dom<F>;
+  using U = Dom<G>;
+  using X = Cod<F>;
+  using Y = Cod<G>;
+  using TorU = std::variant<T, U>;
+  using XorY = std::variant<X, Y>;
+
+  return [f, g](TorU t_or_u) -> XorY {
+    if (std::holds_alternative<T>(t_or_u))
+      return std::invoke(f, std::get<T>(t_or_u));
+    else
+      return std::invoke(g, std::get<U>(t_or_u));
+  };
+}
+
 // ........................................................ f]]]1
 } // namespace tf
