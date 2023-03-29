@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <tuple>
 
 using std::experimental::is_detected_v;
 
@@ -27,31 +28,62 @@ namespace tf {
   };
 
   namespace impl {
-    template <typename F, typename Ret, typename Arg1,
-        typename... Rest>
-    Arg1 function_signature_helper(Ret (F::*)(Arg1, Rest...));
+    template <typename T>
+    struct function_traits;
 
-    template <typename F, typename Ret, typename Arg1,
-        typename... Rest>
-    Arg1 function_signature_helper(
-        Ret (F::*)(Arg1, Rest...) const);
+    template <typename T>
+    struct function_traits
+        : public function_traits<decltype(&T::operator())> {};
 
-    template <typename F, typename Ret, typename Arg1,
-        typename... Rest>
-    Arg1 function_signature_helper(Ret (*)(Arg1, Rest...));
-
-    template <typename F>
-    struct first_parameter {
-      using type =
-          decltype(function_signature_helper(&F::operator()));
+    template <typename Ret, typename... Args>
+    struct function_traits<Ret (*)(Args...)> {
+      using return_type = Ret;
+      using arg_types = std::tuple<Args...>;
     };
+
+    template <typename Ret, typename T, typename... Args>
+    struct function_traits<Ret (T::*)(Args...)> {
+      using return_type = Ret;
+      using arg_types = std::tuple<Args...>;
+      using struct_type = T;
+    };
+
+    template <typename Ret, typename T, typename... Args>
+    struct function_traits<Ret (T::*)(Args...) const> {
+      using return_type = Ret;
+      using arg_types = std::tuple<Args...>;
+      using struct_type = T;
+    };
+
+    template <typename Ret, typename T, typename... Args>
+    struct function_traits<Ret (T::*)(Args...) volatile> {
+      using return_type = Ret;
+      using arg_types = std::tuple<Args...>;
+      using struct_type = T;
+    };
+
+    template <typename Ret, typename T, typename... Args>
+    struct function_traits<Ret (T::*)(Args...) const volatile> {
+      using return_type = Ret;
+      using arg_types = std::tuple<Args...>;
+      using struct_type = T;
+    };
+
+    template <typename Ret, typename... Args>
+    struct function_traits<std::function<Ret(Args...)>> {
+      using return_type = Ret;
+      using arg_types = std::tuple<Args...>;
+    };
+
   } // namespace impl
 
   template <typename F>
-  using Dom = typename impl::first_parameter<F>::type;
+  using Dom =
+      typename std::tuple_element_t<0, typename impl::function_traits<F>::arg_types>;
 
   template <typename F>
-  using Cod = typename std::invoke_result_t<F, Dom<F>>;
+  using Cod = typename impl::function_traits<F>::return_type;
+
   // ...................................................... f]]]1
   // Identity function .................................... f[[[1
   template <typename T>
