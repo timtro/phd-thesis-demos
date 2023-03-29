@@ -76,106 +76,105 @@ struct Bifunctor {
 //         decltype(id(std::declval<int &&>()))>::value);
 //   }
 // }
-//
-// TEST_CASE("compose(f) == f ∘ id_A == id_B ∘ f.", //
-//     "[compose], [mathematical]") {
-//   REQUIRE(compose(f)(A{}) == compose(f, id<A>)(A{}));
-//   REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
-// }
-//
-// TEST_CASE("Compose two C-functions", "[compose], [interface]")
-// {
-//   auto id2 = compose(id<A>, id<A>);
-//   REQUIRE(id2(A{}) == A{});
-// }
-//
-// template <typename T>
-// struct Getable {
-//   T N;
-//   Getable(T N) : N(N) {}
-//   [[nodiscard]] T get() const { return N; }
-// };
-//
-// TEST_CASE("Sould be able to compose with PMFs", //
-//     "[compose], [interface]") {
-//   const auto a = A{};
-//   Getable getable_a{a};
-//   auto fog = compose(id<A>, &Getable<A>::get);
-//   REQUIRE(fog(&getable_a) == a);
-// }
-//
-// TEST_CASE(
-//     "Return of a composed function should preserve the "
-//     "rvalue-refness of the outer function", //
-//     "[compose], [interface]") {
-//   B b{};
-//   auto ref_to_b = [&b](A) -> B & { return b; };
-//   auto fog = compose(ref_to_b, id<A>);
-//   REQUIRE(std::is_lvalue_reference<decltype(fog(A{}))>::value);
-// }
-//
-// TEST_CASE(
-//     "Curried non-variadic functions should bind "
-//     "arguments, one at a time, from left to right.", //
-//     "[curry], [non-variadic], [interface]") {
-//
-//   // abcd : (A, B, C, D) → (A, B, C, D)
-//   // a_b_c_d : A → B → C → D → (A, B, C, D)
-//   auto abcd = [](A a, B b, C c, D d) {
-//     return std::tuple{a, b, c, d};
-//   };
-//   auto a_b_c_d = curry(abcd);
-//
-//   auto [a, b, c, d] = a_b_c_d(A{})(B{})(C{})(D{});
-//   REQUIRE(a == A{});
-//   REQUIRE(b == B{});
-//   REQUIRE(c == C{});
-//   REQUIRE(d == D{});
-// }
-//
-// struct Foo {
-//   D d_returner(A, B, C) { return {}; }
-// };
-//
-// TEST_CASE("PMFs should curry", //
-//     "[curry], [non-variadic], [interface]") {
-//   Foo foo;
-//   auto foo_d_returner = curry(&Foo::d_returner);
-//   REQUIRE(foo_d_returner(&foo)(A{})(B{})(C{}) == D{});
-//   //                     ^ Always give pointer to object
-//   first.
-// }
-//
-// TEST_CASE(
-//     "A curried non-variadic function should preserve the "
-//     "lvalue ref-ness of whatever is returned from the "
-//     "wrapped function.", //
-//     "[curry], [non-variadic], [interface]") {
-//   A a{};
-//   auto ref_to_a = [&a]() -> A & { return a; };
-//   REQUIRE(std::is_lvalue_reference<
-//       decltype(curry(ref_to_a))>::value);
-// }
-//
-// TEST_CASE("Curried functions should…") {
-//   auto ABtoC = curry([](A, B) -> C { return {}; });
-//   auto BtoC = ABtoC(A{});
-//
-//   SECTION("… compose with other callables.",
-//       "[curry], "
-//       "[compose], "
-//       "[interface]") {
-//     REQUIRE(compose(BtoC, f)(A{}) == C{});
-//   }
-// }
-//
-// TEST_CASE(
-//     "Currying should work with the C++14 std outfix "
-//     "operators") {
-//   auto plus = curry(std::plus<int>{});
-//   auto increment = plus(1);
-//   REQUIRE(increment(0) == 1);
-// }
+
+TEST_CASE("compose(f) == f ∘ id_A == id_B ∘ f.", //
+    "[compose], [mathematical]") {
+  REQUIRE(compose(f)(A{}) == compose(f, id)(A{}));
+  REQUIRE(compose(f, id)(A{}) == compose(id, f)(A{}));
+}
+
+TEST_CASE("Compose two C-functions", "[compose], [interface]")
+{
+  auto id2 = compose(id, id);
+  REQUIRE(id2(A{}) == A{});
+}
+
+template <typename T>
+struct Getable {
+  T N;
+  Getable(T N) : N(N) {}
+  [[nodiscard]] T get() const { return N; }
+};
+
+TEST_CASE("Sould be able to compose with PMFs", //
+    "[compose], [interface]") {
+  const auto a = A{};
+  Getable getable_a{a};
+  auto fog = compose(id, &Getable<A>::get);
+  REQUIRE(fog(&getable_a) == a);
+}
+
+TEST_CASE(
+    "Return of a composed function should preserve the "
+    "rvalue-refness of the outer function", //
+    "[compose], [interface]") {
+  B b{};
+  auto ref_to_b = [&b](A) -> B & { return b; };
+  auto fog = compose(ref_to_b, id);
+  REQUIRE(std::is_lvalue_reference<decltype(fog(A{}))>::value);
+}
+
+TEST_CASE(
+    "Curried non-variadic functions should bind "
+    "arguments, one at a time, from left to right.", //
+    "[curry], [non-variadic], [interface]") {
+
+  // abcd : (A, B, C, D) → (A, B, C, D)
+  // a_b_c_d : A → B → C → D → (A, B, C, D)
+  auto abcd = [](A a, B b, C c, D d) {
+    return std::tuple{a, b, c, d};
+  };
+  auto a_b_c_d = curry(abcd);
+
+  auto [a, b, c, d] = a_b_c_d(A{})(B{})(C{})(D{});
+  REQUIRE(a == A{});
+  REQUIRE(b == B{});
+  REQUIRE(c == C{});
+  REQUIRE(d == D{});
+}
+
+struct Foo {
+  D d_returner(A, B, C) { return {}; }
+};
+
+TEST_CASE("PMFs should curry", //
+    "[curry], [non-variadic], [interface]") {
+  Foo foo;
+  auto foo_d_returner = curry(&Foo::d_returner);
+  REQUIRE(foo_d_returner(&foo)(A{})(B{})(C{}) == D{});
+  //                     ^ Always give pointer to object
+}
+
+TEST_CASE(
+    "A curried non-variadic function should preserve the "
+    "lvalue ref-ness of whatever is returned from the "
+    "wrapped function.", //
+    "[curry], [non-variadic], [interface]") {
+  A a{};
+  auto ref_to_a = [&a]() -> A & { return a; };
+  REQUIRE(std::is_lvalue_reference<
+      decltype(curry(ref_to_a))>::value);
+}
+
+TEST_CASE("Curried functions should…") {
+  auto ABtoC = curry([](A, B) -> C { return {}; });
+  auto BtoC = ABtoC(A{});
+
+  SECTION("… compose with other callables.",
+      "[curry], "
+      "[compose], "
+      "[interface]") {
+    REQUIRE(compose(BtoC, f)(A{}) == C{});
+  }
+}
+
+TEST_CASE(
+    "Currying should work with the C++14 std outfix "
+    "operators") {
+  auto plus = curry(std::plus<int>{});
+  auto increment = plus(1);
+  REQUIRE(increment(0) == 1);
+}
 // ........................................................ f]]]1
 // Demos of structure in Cpp .............................. f[[[1
 // Basic category axioms .................................. f[[[2
