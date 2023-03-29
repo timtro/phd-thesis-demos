@@ -415,7 +415,10 @@ TEST_CASE("Test naturality square for len.") {
 // ........................................................ f]]]2
 // CCC in Cpp ............................................. f[[[2
 
-struct Pair : public Bifunctor<Pair, std::pair> {
+template <typename T, typename U>
+using P = std::pair<T, U>;
+
+struct Pair : public Bifunctor<Pair, P> {
   template <typename Fn>
   static auto lmap(Fn f) {
     return [f](auto tu) {
@@ -479,10 +482,10 @@ TEST_CASE("std::pair is functorial in the right position.") {
 }
 
 template <typename F, typename G>
-auto prod(F f, G g) -> Hom<std::pair<Dom<F>, Dom<G>>,
-    std::pair<Cod<F>, Cod<G>>> {
-  using TandU = std::pair<Dom<F>, Dom<G>>;
-  using XandY = std::pair<Cod<F>, Cod<G>>;
+auto prod(F f, G g)
+    -> Hom<P<Dom<F>, Dom<G>>, P<Cod<F>, Cod<G>>> {
+  using TandU = P<Dom<F>, Dom<G>>;
+  using XandY = P<Cod<F>, Cod<G>>;
 
   return [f, g](TandU tu) -> XandY {
     auto [t, u] = tu;
@@ -491,21 +494,20 @@ auto prod(F f, G g) -> Hom<std::pair<Dom<F>, Dom<G>>,
 }
 
 TEST_CASE("Product of functions as expected") {
-  REQUIRE(prod(f, h)(std::pair<A, C>{}) == std::pair<B, D>{});
-  REQUIRE(prod(f, Hom<C, C>{id})(std::pair<A, C>{}) ==
-          Pair::lmap(f)(std::pair<A, C>{}));
+  REQUIRE(prod(f, h)(P<A, C>{}) == P<B, D>{});
+  REQUIRE(prod(f, Hom<C, C>{id})(P<A, C>{}) ==
+          Pair::lmap(f)(P<A, C>{}));
 }
 
 template <typename Fn, typename Gn>
-auto fanout(Fn f, Gn g)
-    -> Hom<Dom<Fn>, std::pair<Cod<Fn>, Cod<Gn>>> {
+auto fanout(Fn f, Gn g) -> Hom<Dom<Fn>, P<Cod<Fn>, Cod<Gn>>> {
   using T = Dom<Fn>;
   using U = Cod<Fn>;
   using V = Cod<Gn>;
 
   static_assert(std::is_same_v<T, Dom<Gn>>);
 
-  return [f, g](T t) -> std::pair<U, V> { return {f(t), g(t)}; };
+  return [f, g](T t) -> P<U, V> { return {f(t), g(t)}; };
 }
 
 TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
@@ -521,8 +523,7 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
 // std::pair associator ................................... f[[[3
 
 template <typename A, typename B, typename C>
-auto associator_fd(std::pair<A, std::pair<B, C>> a_bc)
-    -> std::pair<std::pair<A, B>, C> {
+auto associator_fd(P<A, P<B, C>> a_bc) -> P<P<A, B>, C> {
   auto [a, bc] = a_bc;
   auto [b, c] = bc;
 
@@ -530,16 +531,12 @@ auto associator_fd(std::pair<A, std::pair<B, C>> a_bc)
 }
 
 template <typename A, typename B, typename C>
-auto associator_rv(std::pair<std::pair<A, B>, C> ab_c)
-    -> std::pair<A, std::pair<B, C>> {
+auto associator_rv(P<P<A, B>, C> ab_c) -> P<A, P<B, C>> {
   auto [ab, c] = ab_c;
   auto [a, b] = ab;
 
   return {a, {b, c}};
 }
-
-template <typename T, typename U>
-using P = std::pair<T, U>;
 
 TEST_CASE("associator_fd and associator_rv are inverse.") {
   auto associator_fd_rv =
@@ -597,22 +594,22 @@ struct I {
 };
 
 template <typename A>
-auto l_unitor_fw(std::pair<I, A> ia) -> A {
+auto l_unitor_fw(P<I, A> ia) -> A {
   return ia.second;
 }
 
 template <typename A>
-auto l_unitor_rv(A a) -> std::pair<I, A> {
+auto l_unitor_rv(A a) -> P<I, A> {
   return {I{}, a};
 }
 
 template <typename A>
-auto r_unitor_fw(std::pair<A, I> ai) -> A {
+auto r_unitor_fw(P<A, I> ai) -> A {
   return ai.first;
 }
 
 template <typename A>
-auto r_unitor_rv(A a) -> std::pair<A, I> {
+auto r_unitor_rv(A a) -> P<A, I> {
   return {a, I{}};
 }
 
@@ -655,7 +652,7 @@ TEST_CASE("Unitor diagram") {
 // ........................................................ f]]]3
 // std::pair braiding, self-inverse. ...................... f[[[3
 template <typename A, typename B>
-auto braid(std::pair<A, B> ab) -> std::pair<B, A> {
+auto braid(P<A, B> ab) -> P<B, A> {
   auto [a, b] = ab;
   return {b, a};
 }
