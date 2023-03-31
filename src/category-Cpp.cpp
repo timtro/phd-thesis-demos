@@ -12,7 +12,7 @@ using tst::D; // Tag for unit type
 using tst::f; // f : A → B
 using tst::g; // g : B → C
 using tst::h; // h : C → D
-using tst::id;
+// using tst::id;
 
 #include "Cpp-arrows.hpp"
 
@@ -53,39 +53,43 @@ struct Bifunctor {
 };
 
 // tfunc test cases ....................................... f[[[1
-// TEST_CASE(
-//     "Polymorphic identity function should perfectly "
-//     "forward and …",
-//     "[id], [interface]") {
-//   SECTION("… identify lvalues", "[mathematical]") {
-//     auto a = A{};
-//     auto b = B{};
-//     REQUIRE(id(a) == A{});
-//     REQUIRE(id(b) == B{});
-//   }
-//   SECTION("… preserve lvalue-refness") {
-//     REQUIRE(std::is_lvalue_reference<
-//         decltype(id(std::declval<int &>()))>::value);
-//   }
-//   SECTION("… identify rvalues", "[mathematical]") {
-//     REQUIRE(id(A{}) == A{});
-//     REQUIRE(id(B{}) == B{});
-//   }
-//   SECTION("… preserve rvalue-refness") {
-//     REQUIRE(std::is_rvalue_reference<
-//         decltype(id(std::declval<int &&>()))>::value);
-//   }
-// }
+TEST_CASE(
+    "Polymorphic identity function should perfectly "
+    "forward and …",
+    "[id], [interface]") {
+  SECTION("… identify lvalues", "[mathematical]") {
+    auto a = A{};
+    auto b = B{};
+    REQUIRE(tf::id(a) == A{});
+    REQUIRE(tf::id(b) == B{});
+  }
+  SECTION("… preserve lvalue-refness") {
+    REQUIRE(std::is_lvalue_reference<
+        decltype(tf::id(std::declval<int &>()))>::value);
+  }
+  SECTION("… identify rvalues", "[mathematical]") {
+    REQUIRE(tf::id(A{}) == A{});
+    REQUIRE(tf::id(B{}) == B{});
+  }
+  SECTION("… preserve rvalue-refness") {
+    REQUIRE(std::is_rvalue_reference<
+        decltype(tf::id(std::declval<int &&>()))>::value);
+  }
+}
+
+// For convenience with functions of std::function type,
+//   wrap tf::id in a std::function.
+template <typename T>
+auto id = Hom<T, T>{tf::id<T>};
 
 TEST_CASE("compose(f) == f ∘ id_A == id_B ∘ f.", //
     "[compose], [mathematical]") {
-  REQUIRE(compose(f)(A{}) == compose(f, id)(A{}));
-  REQUIRE(compose(f, id)(A{}) == compose(id, f)(A{}));
+  REQUIRE(compose(f)(A{}) == compose(f, id<A>)(A{}));
+  REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
 }
 
-TEST_CASE("Compose two C-functions", "[compose], [interface]")
-{
-  auto id2 = compose(id, id);
+TEST_CASE("Compose two C-functions", "[compose], [interface]") {
+  auto id2 = compose(id<A>, id<A>);
   REQUIRE(id2(A{}) == A{});
 }
 
@@ -100,7 +104,7 @@ TEST_CASE("Sould be able to compose with PMFs", //
     "[compose], [interface]") {
   const auto a = A{};
   Getable getable_a{a};
-  auto fog = compose(id, &Getable<A>::get);
+  auto fog = compose(id<A>, &Getable<A>::get);
   REQUIRE(fog(&getable_a) == a);
 }
 
@@ -110,7 +114,7 @@ TEST_CASE(
     "[compose], [interface]") {
   B b{};
   auto ref_to_b = [&b](A) -> B & { return b; };
-  auto fog = compose(ref_to_b, id);
+  auto fog = compose(ref_to_b, id<A>);
   REQUIRE(std::is_lvalue_reference<decltype(fog(A{}))>::value);
 }
 
@@ -188,9 +192,9 @@ TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
 }
 
 TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
-  REQUIRE(f(A{}) == compose(f, id)(A{}));
-  REQUIRE(f(A{}) == compose(id, f)(A{}));
-  REQUIRE(compose(f, id)(A{}) == compose(id, f)(A{}));
+  REQUIRE(f(A{}) == compose(f, id<A>)(A{}));
+  REQUIRE(f(A{}) == compose(id<B>, f)(A{}));
+  REQUIRE(compose(f, id<A>)(A{}) == compose(id<B>, f)(A{}));
 }
 
 // ........................................................ f]]]2
@@ -212,10 +216,10 @@ TEST_CASE("Check the functor laws for IdF") {
   auto IdF_f = Id::fmap(f);
   auto IdF_g = Id::fmap(g);
   auto IdF_gf = Id::fmap<Hom<A, C>>(compose(g, f));
-  auto IdF_idA = Id::fmap<Hom<A, A>>(id);
+  auto IdF_idA = Id::fmap(id<A>);
 
   REQUIRE(compose(IdF_g, IdF_f)(a) == IdF_gf(a));
-  REQUIRE(IdF_idA(a) == id(a));
+  REQUIRE(IdF_idA(a) == id<A>(a));
 }
 // ........................................................ f]]]2
 // Optional functor ....................................... f[[[2
@@ -259,13 +263,13 @@ TEST_CASE("Check the functor laws for Optional::fmap") {
   auto opt_f = Optional::fmap(f);
   auto opt_g = Optional::fmap(g);
   auto opt_gf = Optional::fmap<Hom<A, C>>(compose(g, f));
-  auto opt_idA = Optional::fmap<Hom<A, A>>(id);
+  auto opt_idA = Optional::fmap(id<A>);
 
   REQUIRE(compose(opt_g, opt_f)(a) == opt_gf(a));
-  REQUIRE(opt_idA(a) == id(a));
+  REQUIRE(opt_idA(a) == id<Optional::Of<A>>(a));
 
   REQUIRE(compose(opt_g, opt_f)(not_a) == opt_gf(not_a));
-  REQUIRE(opt_idA(not_a) == id(not_a));
+  REQUIRE(opt_idA(not_a) == id<Optional::Of<A>>(not_a));
 }
 
 // ........................................................ f]]]2
@@ -306,16 +310,16 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
   REQUIRE(compose(vec_g, vec_f)(a_s) == vec_gf(a_s));
 
   // vec_id$-$ : $\FOf{\ttF}{-} → \FOf{\ttF}{-}$
-  auto vec_idA = Vector::fmap<Hom<A, A>>(id);
-  auto vec_idB = Vector::fmap<Hom<B, B>>(id);
-  auto vec_idC = Vector::fmap<Hom<C, C>>(id);
+  auto vec_idA = Vector::fmap(id<A>);
+  auto vec_idB = Vector::fmap(id<B>);
+  auto vec_idC = Vector::fmap(id<C>);
 
   auto b_s = vec_f(a_s);
   auto c_s = vec_g(b_s);
 
-  REQUIRE(vec_idA(a_s) == id(a_s));
-  REQUIRE(vec_idB(b_s) == id(b_s));
-  REQUIRE(vec_idC(c_s) == id(c_s));
+  REQUIRE(vec_idA(a_s) == id<Vector::Of<A>>(a_s));
+  REQUIRE(vec_idB(b_s) == id<Vector::Of<B>>(b_s));
+  REQUIRE(vec_idC(c_s) == id<Vector::Of<C>>(c_s));
 }
 
 // ........................................................ f]]]2
@@ -350,14 +354,15 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
 
   // $\Ffmap{\ttName{Chom}}(\ttg) ∘ \Ffmap{\ttName{CHom}}(\ttf) =
   // \Ffmap{\ttName{CHom}}(\ttg ∘ \ttf)$
-  REQUIRE(homA_gf(id)(A{}) == compose(homA_g, homA_f)(id)(A{}));
+  REQUIRE(homA_gf(id<A>)(A{}) ==
+          compose(homA_g, homA_f)(id<A>)(A{}));
 
-  auto homA_idA = CHom<A>::fmap<Hom<A, A>>(id);
-  auto homA_idB = CHom<A>::fmap<Hom<B, B>>(id);
-  auto homA_idC = CHom<A>::fmap<Hom<C, C>>(id);
+  auto homA_idA = CHom<A>::fmap(id<A>);
+  auto homA_idB = CHom<A>::fmap(id<B>);
+  auto homA_idC = CHom<A>::fmap(id<C>);
   auto gf = compose(g, f);
 
-  REQUIRE(homA_idA(id)(A{}) == id(A{}));
+  REQUIRE(homA_idA(id<A>)(A{}) == id<A>(A{}));
   REQUIRE(homA_idB(f)(A{}) == f(A{}));
   REQUIRE(homA_idC(gf)(A{}) == gf(A{}));
 }
@@ -375,7 +380,7 @@ struct Const
     : public Functor<Const<T>, Always<T>::template given> {
   template <typename Fn>
   static auto fmap(Fn) -> Hom<T, T> {
-    return id;
+    return id<T>;
   };
 };
 
@@ -385,9 +390,9 @@ TEST_CASE("Functor axioms of Const<A>.") {
   auto constA_gf = Const<A>::fmap(compose(g, f));
   REQUIRE(constA_gf(A{}) == compose(constA_g, constA_f)(A{}));
 
-  REQUIRE(Const<A>::fmap(id)(A{}) == A{});
-  REQUIRE(Const<A>::fmap(id)(A{}) == A{});
-  REQUIRE(Const<A>::fmap(id)(A{}) == A{});
+  REQUIRE(Const<A>::fmap(id<A>)(A{}) == A{});
+  REQUIRE(Const<A>::fmap(id<B>)(A{}) == A{});
+  REQUIRE(Const<A>::fmap(id<C>)(A{}) == A{});
 }
 
 // ........................................................ f]]]2
@@ -445,16 +450,16 @@ TEST_CASE("std::pair is functorial in the left position.") {
 
   REQUIRE(compose(l_g, l_f)(ac) == l_gf(ac));
 
-  auto l_idA = Pair::lmap<Hom<A, A>>(id);
-  auto l_idB = Pair::lmap<Hom<B, B>>(id);
-  auto l_idC = Pair::lmap<Hom<C, C>>(id);
+  auto l_idA = Pair::lmap(id<A>);
+  auto l_idB = Pair::lmap(id<B>);
+  auto l_idC = Pair::lmap(id<C>);
 
   auto bc = l_f(ac);
   auto cc = l_g(bc);
 
-  REQUIRE(l_idA(ac) == id(ac));
-  REQUIRE(l_idB(bc) == id(bc));
-  REQUIRE(l_idC(cc) == id(cc));
+  REQUIRE(l_idA(ac) == id<P<A, C>>(ac));
+  REQUIRE(l_idB(bc) == id<P<B, C>>(bc));
+  REQUIRE(l_idC(cc) == id<P<C, C>>(cc));
 }
 
 TEST_CASE("std::pair is functorial in the right position.") {
@@ -468,16 +473,16 @@ TEST_CASE("std::pair is functorial in the right position.") {
 
   REQUIRE(compose(r_g, r_f)(ca) == r_gf(ca));
 
-  auto r_idA = Pair::rmap<Hom<A, A>>(id);
-  auto r_idB = Pair::rmap<Hom<B, B>>(id);
-  auto r_idC = Pair::rmap<Hom<C, C>>(id);
+  auto r_idA = Pair::rmap(id<A>);
+  auto r_idB = Pair::rmap(id<B>);
+  auto r_idC = Pair::rmap(id<C>);
 
   auto cb = r_f(ca);
   auto cc = r_g(cb);
 
-  REQUIRE(r_idA(ca) == id(ca));
-  REQUIRE(r_idB(cb) == id(cb));
-  REQUIRE(r_idC(cc) == id(cc));
+  REQUIRE(r_idA(ca) == id<P<C, A>>(ca));
+  REQUIRE(r_idB(cb) == id<P<C, B>>(cb));
+  REQUIRE(r_idC(cc) == id<P<C, C>>(cc));
 }
 
 template <typename F, typename G>
@@ -492,10 +497,12 @@ auto prod(F f, G g)
   };
 }
 
-TEST_CASE("Product of functions as expected") {
-  REQUIRE(prod(f, h)(P<A, C>{}) == P<B, D>{});
-  REQUIRE(prod(f, Hom<C, C>{id})(P<A, C>{}) ==
-          Pair::lmap(f)(P<A, C>{}));
+TEST_CASE(
+    "Product of functions behaves as expected with "
+    "respect to  l/rmap.") {
+  auto ac = P<A, C>{};
+  REQUIRE(prod(f, id<C>)(ac) == Pair::lmap(f)(ac));
+  REQUIRE(prod(id<A>, h)(ac) == Pair::rmap(h)(ac));
 }
 
 template <typename Fn, typename Gn>
@@ -521,67 +528,51 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
 
 // std::pair associator ................................... f[[[3
 
-template <typename A, typename B, typename C>
-auto associator_fd(P<A, P<B, C>> a_bc) -> P<P<A, B>, C> {
-  auto [a, bc] = a_bc;
-  auto [b, c] = bc;
+template <typename T, typename U, typename V>
+auto associator_fd(P<T, P<U, V>> t_uv) -> P<P<T, U>, V> {
+  auto [t, uv] = t_uv;
+  auto [u, v] = uv;
 
-  return {{a, b}, c};
+  return {{t, u}, v};
 }
 
-template <typename A, typename B, typename C>
-auto associator_rv(P<P<A, B>, C> ab_c) -> P<A, P<B, C>> {
-  auto [ab, c] = ab_c;
-  auto [a, b] = ab;
+template <typename T, typename U, typename V>
+auto associator_rv(P<P<T, U>, V> tu_v) -> P<T, P<U, V>> {
+  auto [tu, v] = tu_v;
+  auto [t, u] = tu;
 
-  return {a, {b, c}};
+  return {t, {u, v}};
 }
 
 TEST_CASE("associator_fd and associator_rv are inverse.") {
-  auto associator_fd_rv =
-      compose(associator_rv<A, B, C>, associator_fd<A, B, C>);
-  auto Pa_Pbc = P<A, P<B, C>>{};
-  REQUIRE(associator_fd_rv(Pa_Pbc) == id(Pa_Pbc));
+  // clang-format off
+  auto associator_fd_rv = compose(
+        associator_rv<A, B, C>,
+        associator_fd<A, B, C>
+      );
+  // clang-format on
+
+  auto a_bc = P<A, P<B, C>>{};
+  REQUIRE(associator_fd_rv(a_bc) == id<P<A, P<B, C>>>(a_bc));
 }
 
 TEST_CASE("Associator diagram for std::pair") {
-  auto PPPab_c_d = P<P<P<A, B>, C>, D>{}; // End
-  // $↑$ associator_fd<P<A,B>, C, D>
-  auto PabPcd = P<P<A, B>, P<C, D>>{};
-  // $↑$ associator_fd<A, B, P<C,D>>
-  auto Pa_Pb_Pcd = P<A, P<B, P<C, D>>>{}; // Start
-  // $↓$ id $×$ associator_fd<B,C,D>
-  auto Pa_PPbc_d = P<A, P<P<B, C>, D>>{};
-  // $↓$ associator_fd<A, P<B, C>, D>
-  auto PPa_Pbc_d = P<P<A, P<B, C>>, D>{};
-  // $↓$ associator_fd<A,B,C> $×$ id
-  // auto PPPab_c_d = P<P<P<A, B>, C>, D>{}; // End
+  auto start = P<A, P<B, P<C, D>>>{};
 
-  // Clockwise
-  REQUIRE(associator_fd<A, B, P<C, D>>(Pa_Pb_Pcd) == PabPcd);
-  REQUIRE(associator_fd<P<A, B>, C, D>(PabPcd) == PPPab_c_d);
+  // clang-format off
+  auto cw_path = compose(
+        associator_fd<P<A, B>, C, D>,
+        associator_fd<A, B, P<C, D>>
+      );
 
-  auto cw_path = compose(associator_fd<P<A, B>, C, D>,
-      associator_fd<A, B, P<C, D>>);
+  auto ccw_path = compose(
+        prod(associator_fd<A, B, C>, id<D>),
+        associator_fd<A, P<B, C>, D>,
+        prod(id<A>, associator_fd<B, C, D>)
+      );
+  // clang-format on
 
-  REQUIRE(cw_path(Pa_Pb_Pcd) == PPPab_c_d);
-
-  // Anti-clockwise
-  auto id_x_assoc_BCD =
-      prod(Hom<A, A>{id}, std::function{associator_fd<B, C, D>});
-  REQUIRE(id_x_assoc_BCD(Pa_Pb_Pcd) == Pa_PPbc_d);
-  REQUIRE(associator_fd<A, P<B, C>, D>(Pa_PPbc_d) == PPa_Pbc_d);
-
-  auto assoc_A_PBC_D_x_id =
-      prod(std::function{associator_fd<A, B, C>}, Hom<D, D>{id});
-  REQUIRE(assoc_A_PBC_D_x_id(PPa_Pbc_d) == PPPab_c_d);
-
-  auto ccw_path = compose(assoc_A_PBC_D_x_id,
-      associator_fd<A, P<B, C>, D>, id_x_assoc_BCD);
-  REQUIRE(ccw_path(Pa_Pb_Pcd) == PPPab_c_d);
-
-  // Now check composites
-  REQUIRE(ccw_path(Pa_Pb_Pcd) == cw_path(Pa_Pb_Pcd));
+  REQUIRE(ccw_path(start) == cw_path(start));
 };
 
 // ........................................................ f]]]3
@@ -592,24 +583,24 @@ struct I {
   bool operator==(const I) const { return true; }
 };
 
-template <typename A>
-auto l_unitor_fw(P<I, A> ia) -> A {
-  return ia.second;
+template <typename T>
+auto l_unitor_fw(P<I, T> it) -> T {
+  return std::get<1>(it);
 }
 
-template <typename A>
-auto l_unitor_rv(A a) -> P<I, A> {
-  return {I{}, a};
+template <typename T>
+auto l_unitor_rv(T t) -> P<I, T> {
+  return {I{}, t};
 }
 
-template <typename A>
-auto r_unitor_fw(P<A, I> ai) -> A {
-  return ai.first;
+template <typename T>
+auto r_unitor_fw(P<T, I> ti) -> T {
+  return std::get<0>(ti);
 }
 
-template <typename A>
-auto r_unitor_rv(A a) -> P<A, I> {
-  return {a, I{}};
+template <typename T>
+auto r_unitor_rv(T t) -> P<T, I> {
+  return {t, I{}};
 }
 
 TEST_CASE("L-/R-unitor inverse") {
@@ -617,47 +608,82 @@ TEST_CASE("L-/R-unitor inverse") {
   auto ai = P<A, I>{};
 
   auto l_unitor_fw_rv = compose(l_unitor_rv<A>, l_unitor_fw<A>);
-  REQUIRE(l_unitor_fw_rv(ia) == id(ia));
+  REQUIRE(l_unitor_fw_rv(ia) == id<P<I, A>>(ia));
 
   auto r_unitor_fw_rv = compose(r_unitor_rv<A>, r_unitor_fw<A>);
-  REQUIRE(r_unitor_fw_rv(ai) == id(ai));
+  REQUIRE(r_unitor_fw_rv(ai) == id<P<A, I>>(ai));
 }
 
 TEST_CASE("Unitor diagram") {
-  auto Pab = P<A, B>{}; // End
-  // $↑$ runitor_x_id
-  auto PPai_b = P<P<A, I>, B>{};
-  // $↑$ associator<A,I,B>
-  auto Pa_Pib = P<A, P<I, B>>{}; // Start
-  // $↓$ id_x_lunitor
-  // auto Pab = P<A, B>{};       // End
+  auto a_ib = P<A, P<I, B>>{};
 
-  // Clockwise path
-  REQUIRE(associator_fd<A, I, B>(Pa_Pib) == PPai_b);
+  // clang-format off
+  auto cw_path = compose(
+        prod(r_unitor_fw<A>, id<B>),
+        associator_fd<A, I, B>
+      );
+  auto ccw_path = prod(id<A>, l_unitor_fw<B>);
+  // clang-format on
 
-  auto runitor_x_id = prod(r_unitor_fw<A>, Hom<B, B>{id});
-  REQUIRE(runitor_x_id(PPai_b) == Pab);
-
-  auto cw_path = compose(runitor_x_id, associator_fd<A, I, B>);
-
-  // Anti-clockwise path
-  auto ccw_path = prod(Hom<A, A>{id}, l_unitor_fw<B>);
-  REQUIRE(ccw_path(Pa_Pib) == Pab);
-
-  // Check both paths are equivalent
-  REQUIRE(cw_path(Pa_Pib) == ccw_path(Pa_Pib));
+  REQUIRE(cw_path(a_ib) == ccw_path(a_ib));
 }
 
 // ........................................................ f]]]3
 // std::pair braiding, self-inverse. ...................... f[[[3
-template <typename A, typename B>
-auto braid(P<A, B> ab) -> P<B, A> {
-  auto [a, b] = ab;
-  return {b, a};
+template <typename T, typename U>
+auto braid(P<T, U> tu) -> P<U, T> {
+  auto [t, u] = tu;
+  return {u, t};
 }
+
+TEST_CASE("Braiding is self-inverse") {
+  auto ab = P<A, B>{};
+  auto ba = P<B, A>{};
+  REQUIRE(braid(ab) == ba);
+  REQUIRE(braid(braid(ab)) == id<P<A, B>>(ab));
+}
+
+TEST_CASE("Braiding diagram 1") {
+  auto ab_c = P<P<A, B>, C>{};
+
+  // clang-format off
+  auto cw_path = compose(
+        prod(braid<C, A>, id<B>),
+        associator_fd<C, A, B>,
+        braid<P<A, B>, C>
+      );
+  auto ccw_path = compose(
+        associator_fd<A, C, B>,
+        prod(id<A>, braid<B, C>),
+        associator_rv<A, B, C>
+      );
+  // clang-format on
+
+  REQUIRE(cw_path(ab_c) == ccw_path(ab_c));
+}
+
+TEST_CASE("Braiding diagram 2") {
+  auto a_bc = P<A, P<B, C>>{};
+
+  // clang-format off
+  auto cw_path = compose(
+        prod(id<B>, braid<C, A>),
+        associator_rv<B, C, A>,
+        braid<A, P<B, C>>
+      );
+  auto ccw_path = compose(
+        associator_rv<B, A, C>,
+        prod(braid<A, B>, id<C>),
+        associator_fd<A, B, C>
+      );
+  // clang-format on
+
+  REQUIRE(cw_path(a_bc) == ccw_path(a_bc));
+}
+
 // ........................................................ f]]]3
 // ........................................................ f]]]2
-// Prod and Coprod of functions ........................... f[[[2
+// Bi-part of the bicaryesian closure ..................... f[[[2
 
 template <typename Fn, typename Gn>
 auto fanin(Fn f, Gn g)
@@ -691,13 +717,13 @@ TEST_CASE("fanin as expected") {
 }
 
 // ((A → B), (C → D)) → (A + C → B + D)
-template <typename F, typename G>
-auto coprod(F f, G g) -> Hom<std::variant<Dom<F>, Dom<G>>,
-    std::variant<Cod<F>, Cod<G>>> {
-  using T = Dom<F>;
-  using U = Dom<G>;
-  using X = Cod<F>;
-  using Y = Cod<G>;
+template <typename Fn, typename Gn>
+auto coprod(Fn f, Gn g) -> Hom<std::variant<Dom<Fn>, Dom<Gn>>,
+    std::variant<Cod<Fn>, Cod<Gn>>> {
+  using T = Dom<Fn>;
+  using U = Dom<Gn>;
+  using X = Cod<Fn>;
+  using Y = Cod<Gn>;
   using TorU = std::variant<T, U>;
   using XorY = std::variant<X, Y>;
 
