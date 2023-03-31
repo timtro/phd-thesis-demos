@@ -4,10 +4,10 @@
 
 #include <experimental/type_traits>
 #include <functional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <tuple>
 
 using std::experimental::is_detected_v;
 
@@ -78,8 +78,8 @@ namespace tf {
   } // namespace impl
 
   template <typename F>
-  using Dom =
-      typename std::tuple_element_t<0, typename impl::function_traits<F>::arg_types>;
+  using Dom = typename std::tuple_element_t<0,
+      typename impl::function_traits<F>::arg_types>;
 
   template <typename F>
   using Cod = typename impl::function_traits<F>::return_type;
