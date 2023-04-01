@@ -4,6 +4,15 @@
 #include <type_traits>
 #include <variant>
 
+#include "Cpp-arrows.hpp"
+
+using tf::Cod;
+using tf::compose;
+using tf::curry;
+using tf::Dom;
+using tf::Doms;
+using tf::Hom;
+
 #include "test-tools.hpp"
 using tst::A; // Tag for unit type
 using tst::B; // Tag for unit type
@@ -13,15 +22,6 @@ using tst::f; // f : A → B
 using tst::g; // g : B → C
 using tst::h; // h : C → D
 // using tst::id;
-
-#include "Cpp-arrows.hpp"
-
-using tf::Cod;
-using tf::compose;
-using tf::curry;
-using tf::Dom;
-using tf::Doms;
-using tf::Hom;
 
 template <typename Derived,
     template <typename, typename...> typename TypeTemplate>
