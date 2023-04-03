@@ -308,40 +308,6 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
 }
 
 // ........................................................ f]]]2
-// covariant hom functor .................................. f[[[2
-
-template <typename T>
-struct HomFrom {
-  template <typename U>
-  using HomTo = Hom<T, U>;
-};
-
-template <typename T>
-struct CHom
-    : public Functor<CHom<T>, HomFrom<T>::template HomTo> {
-  template <typename Fn>
-  static auto fmap(Fn f)
-      -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
-    return [f](auto g) { return compose(f, g); };
-  };
-};
-
-TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
-
-  // clang-format off
-  // $\Ffmap{\ttName{Chom}}(\ttg) ∘ \Ffmap{\ttName{CHom}}(\ttf) = \Ffmap{\ttName{CHom}}(\ttg ∘ \ttf)$
-  REQUIRE(
-    compose(CHom<A>::fmap(g), CHom<A>::fmap(f))(id<A>)(A{}) ==
-      CHom<A>::fmap<Hom<A, C>>(compose(g, f))(id<A>)(A{})
-    );
-  // clang-format on
-
-  REQUIRE(CHom<A>::fmap(id<A>)(id<A>)(A{}) == id<A>(A{}));
-  REQUIRE(CHom<A>::fmap(id<B>)(f)(A{}) == f(A{}));
-  auto gof = compose(g, f);
-  REQUIRE(CHom<A>::fmap(id<C>)(gof)(A{}) == gof(A{}));
-}
-// ........................................................ f]]]2
 // Constant functor ....................................... f[[[2
 
 template <typename T>
@@ -401,7 +367,7 @@ TEST_CASE("Test naturality square for len.") {
 
 // ........................................................ f]]]2
 // CCC in Cpp ............................................. f[[[2
-
+// Categorical product bifunctor .......................... f[[[3
 template <typename T, typename U>
 using P = std::pair<T, U>;
 
@@ -506,6 +472,7 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
   REQUIRE(std::get<1>(A_to_BxC(A{})) == A_to_C(A{}));
 }
 
+// ........................................................ f]]]3
 // std::pair associator ................................... f[[[3
 
 template <typename T, typename U, typename V>
@@ -681,16 +648,55 @@ TEST_CASE("Braiding diagram 2") {
 }
 
 // ........................................................ f]]]3
+// covariant hom functor .................................. f[[[3
+
+template <typename T>
+struct HomFrom {
+  template <typename U>
+  using HomTo = Hom<T, U>;
+};
+
+template <typename T>
+struct CHom
+    : public Functor<CHom<T>, HomFrom<T>::template HomTo> {
+  template <typename Fn>
+  static auto fmap(Fn f)
+      -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
+    return [f](auto g) { return compose(f, g); };
+  };
+};
+
+TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
+
+  // clang-format off
+  // $\Ffmap{\ttName{Chom}}(\ttg) ∘ \Ffmap{\ttName{CHom}}(\ttf) = \Ffmap{\ttName{CHom}}(\ttg ∘ \ttf)$
+  REQUIRE(
+    compose(CHom<A>::fmap(g), CHom<A>::fmap(f))(id<A>)(A{}) ==
+      CHom<A>::fmap<Hom<A, C>>(compose(g, f))(id<A>)(A{})
+    );
+  // clang-format on
+
+  REQUIRE(CHom<A>::fmap(id<A>)(id<A>)(A{}) == id<A>(A{}));
+  REQUIRE(CHom<A>::fmap(id<B>)(f)(A{}) == f(A{}));
+  auto gof = compose(g, f);
+  REQUIRE(CHom<A>::fmap(id<C>)(gof)(A{}) == gof(A{}));
+}
+// ........................................................ f]]]3
 // ........................................................ f]]]2
-// Bi-part of the bicaryesian closure ..................... f[[[2
+// Coproduct bifunctor .................................... f[[[2
+
+template <typename T, typename U>
+using S = std::variant<T, U>;
+
+// TODO: Define S bifunctor here.
 
 template <typename Fn, typename Gn>
 auto fanin(Fn f, Gn g)
-    -> Hom<std::variant<Dom<Fn>, Dom<Gn>>, Cod<Fn>> {
+    -> Hom<S<Dom<Fn>, Dom<Gn>>, Cod<Fn>> {
   using T = Dom<Fn>;
   using U = Dom<Gn>;
   using X = Cod<Fn>;
-  using TorU = std::variant<T, U>;
+  using TorU = S<T, U>;
 
   static_assert(std::is_same_v<X, Cod<Gn>>);
 
@@ -706,8 +712,8 @@ TEST_CASE("fanin as expected") {
   auto A_to_bool = [](A) { return true; };
   auto B_to_bool = [](B) { return false; };
 
-  auto really_a = std::variant<A, B>{A{}};
-  auto really_b = std::variant<A, B>{B{}};
+  auto really_a = S<A, B>{A{}};
+  auto really_b = S<A, B>{B{}};
 
   auto AorB_to_bool = fanin(A_to_bool, B_to_bool);
 
@@ -751,6 +757,9 @@ TEST_CASE("") {
   auto a = std::variant<Never, int>{4};
   REQUIRE(std::get<int>(a) == 4);
 }
+
+// ........................................................ f]]]2
+// Product distributes over coproduct ..................... f[[[2
 
 // ........................................................ f]]]2
 // ........................................................ f]]]1
