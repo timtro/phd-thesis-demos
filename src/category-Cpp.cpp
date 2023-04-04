@@ -41,14 +41,9 @@ struct Bifunctor {
   template <typename L, typename R>
   using Of = TypeTemplate<L, R>;
 
-  template <typename Fn>
-  static auto lmap(Fn f) {
-    return Derived::lmap(f);
-  }
-
-  template <typename Fn>
-  static auto rmap(Fn f) {
-    return Derived::rmap(f);
+  template <typename Fn, typename Gn>
+  static auto bimap(Fn f, Gn g) {
+    return Derived::bimap(f, g);
   }
 };
 
@@ -372,49 +367,32 @@ template <typename T, typename U>
 using P = std::pair<T, U>;
 
 struct Pair : public Bifunctor<Pair, P> {
-  template <typename Fn>
-  static auto lmap(Fn f) {
-    return [f](auto tu) {
+  template <typename Fn, typename Gn>
+  static auto bimap(Fn f, Gn g) {
+    return [f, g](auto tu) {
       auto [t, u] = tu;
-      return std::pair{f(t), u};
-    };
-  }
-
-  template <typename Fn>
-  static auto rmap(Fn f) {
-    return [f](auto tu) {
-      auto [t, u] = tu;
-      return std::pair{t, f(u)};
+      return std::pair{f(t), g(u)};
     };
   }
 };
 
 TEST_CASE("std::pair is functorial in the left position.") {
 
-  auto ac = Pair::Of<A, C>{};
+  auto ab = Pair::Of<A, B>{};
 
   // clang-format off
   REQUIRE(
-    compose(Pair::lmap(g), Pair::lmap(f))(ac) ==
-              Pair::lmap<Hom<A, C>>(compose(g, f))(ac)
+    compose(Pair::bimap(g, id<B>), Pair::bimap(f, id<B>))(ab) ==
+              Pair::bimap<Hom<A, C>, Hom<B,B>>(compose(g, f), id<B>)(ab)
   );
-  // clang-format on
 
-  REQUIRE(Pair::lmap(id<A>)(ac) == id<P<A, C>>(ac));
-}
-
-TEST_CASE("std::pair is functorial in the right position.") {
-
-  auto ca = Pair::Of<C, A>{};
-
-  // clang-format off
   REQUIRE(
-    compose(Pair::rmap(g), Pair::rmap(f))(ca) ==
-              Pair::rmap<Hom<A, C>>(compose(g, f))(ca)
+    compose(Pair::bimap(id<A>, h), Pair::bimap(id<A>, g))(ab) ==
+              Pair::bimap<Hom<A,A>, Hom<B, D>>(id<A>, compose(h, g))(ab)
   );
   // clang-format on
 
-  REQUIRE(Pair::rmap(id<A>)(ca) == id<P<C, A>>(ca));
+  REQUIRE(Pair::bimap(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
 }
 
 template <typename Fn, typename Gn>
@@ -447,8 +425,8 @@ TEST_CASE(
     "Product of functions behaves as expected with "
     "respect to  l/rmap.") {
   auto ac = P<A, C>{};
-  REQUIRE(prod(f, id<C>)(ac) == Pair::lmap(f)(ac));
-  REQUIRE(prod(id<A>, h)(ac) == Pair::rmap(h)(ac));
+  REQUIRE(prod(f, id<C>)(ac) == Pair::bimap(f, id<C>)(ac));
+  REQUIRE(prod(id<A>, h)(ac) == Pair::bimap(id<A>, h)(ac));
 }
 
 template <typename Fn, typename Gn>
@@ -473,7 +451,7 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
 }
 
 // ........................................................ f]]]3
-// std::pair associator ................................... f[[[3
+// Product associator ..................................... f[[[3
 
 template <typename T, typename U, typename V>
 auto associator_fd(P<T, P<U, V>> t_uv) -> P<P<T, U>, V> {
@@ -531,7 +509,7 @@ TEST_CASE("Associator diagram for std::pair") {
 };
 
 // ........................................................ f]]]3
-// std::pair unitor ....................................... f[[[3
+// Product Unitor ......................................... f[[[3
 
 // unit-type is any singleton.
 struct I {
@@ -597,7 +575,7 @@ TEST_CASE("Unitor diagram") {
 }
 
 // ........................................................ f]]]3
-// std::pair braiding, self-inverse. ...................... f[[[3
+// Product braiding, self-inverse ......................... f[[[3
 template <typename T, typename U>
 auto braid(P<T, U> tu) -> P<U, T> {
   auto [t, u] = tu;
