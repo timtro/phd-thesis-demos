@@ -663,14 +663,117 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
 // ........................................................ f]]]2
 // Coproduct bifunctor .................................... f[[[2
 
-template <typename T, typename U>
-using S = std::variant<T, U>;
+template <typename T>
+struct Left {
+  T value;
 
-// TODO: Define S bifunctor here.
+  bool operator==(const Left<T> &other) const {
+    return value == other.value;
+  }
+};
+
+template <typename U>
+struct Right {
+  U value;
+
+  bool operator==(const Right<U> &other) const {
+    return value == other.value;
+  }
+};
+
+struct Never { // Monoidal unit for LeftOrRight.
+  Never() = delete;
+  Never(const Never &) = delete;
+  bool operator==(const Never&) const {
+    return false;
+  }
+};
+
+namespace util {
+  template <typename T, typename... Types>
+  constexpr bool holds_alternative(
+      const std::variant<Types...> &v) noexcept {
+    if constexpr (
+        std::is_same_v<T, Left<Never>> ||
+        std::is_same_v<T, Right<Never>>) {
+      return true;
+    } else {
+      return std::holds_alternative<T>(v);
+    }
+  }
+} // namespace util
+
+template <typename T, typename U>
+class LeftOrRight : public std::variant<Left<T>, Right<U>> {
+public:
+  using std::variant<Left<T>, Right<U>>::variant;
+
+  [[nodiscard]] const T &left() const {
+    return std::get<Left<T>>(*this).value;
+  }
+
+  [[nodiscard]] const U &right() const {
+    return std::get<Right<U>>(*this).value;
+  }
+};
+
+template <typename T, typename U>
+using S = LeftOrRight<T, U>;
+
+struct Either : public Bifunctor<Either, LeftOrRight> {
+  template <typename Fn, typename Gn>
+  static auto bimap(Fn f, Gn g) {
+    using T = Dom<Fn>;
+    using U = Dom<Gn>;
+    using X = Cod<Fn>;
+    using Y = Cod<Gn>;
+    using TorU = S<T, U>;
+    using XorY = S<X, Y>;
+
+    return [f, g](TorU t_or_u) -> XorY {
+      if (util::holds_alternative<Left<T>>(t_or_u))
+        return Left<X>{std::invoke(f, t_or_u.left())};
+      else
+        return Right<Y>{std::invoke(g, t_or_u.right())};
+    };
+  };
+};
+
+TEST_CASE("P is functorial in the left- and right-position.") {
+
+  auto just_a = Either::Of<A, B>{Left<A>{}};
+  auto just_b = Either::Of<A, B>{Right<B>{}};
+
+  // clang-format off
+  REQUIRE(
+    compose(Either::bimap(g, id<B>), Either::bimap(f, id<B>))(just_a) ==
+              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g, f), id<B>)(just_a)
+  );
+
+  REQUIRE(
+    compose(Either::bimap(g, id<B>), Either::bimap(f, id<B>))(just_b) ==
+              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g, f), id<B>)(just_b)
+  );
+
+  REQUIRE(
+    compose(Either::bimap(id<A>, h), Either::bimap(id<A>, g))(just_a) ==
+              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>, compose(h, g))(just_a)
+  );
+
+  REQUIRE(
+    compose(Either::bimap(id<A>, h), Either::bimap(id<A>, g))(just_b) ==
+              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>, compose(h, g))(just_b)
+  );
+  // clang-format on
+
+  REQUIRE(Either::bimap(id<A>, id<B>)(just_a) ==
+          id<S<A, B>>(just_a));
+  REQUIRE(Either::bimap(id<A>, id<B>)(just_b) ==
+          id<S<A, B>>(just_b));
+}
 
 template <typename Fn, typename Gn>
-auto fanin(Fn f, Gn g)
-    -> Hom<S<Dom<Fn>, Dom<Gn>>, Cod<Fn>> {
+auto fanin(Fn f, Gn g) -> Hom<S<Dom<Fn>, Dom<Gn>>, Cod<Fn>> {
   using T = Dom<Fn>;
   using U = Dom<Gn>;
   using X = Cod<Fn>;
@@ -679,10 +782,10 @@ auto fanin(Fn f, Gn g)
   static_assert(std::is_same_v<X, Cod<Gn>>);
 
   return [f, g](TorU t_or_u) -> X {
-    if (std::holds_alternative<T>(t_or_u))
-      return std::invoke(f, std::get<T>(t_or_u));
+    if (util::holds_alternative<Left<T>>(t_or_u))
+      return std::invoke(f, t_or_u.left());
     else
-      return std::invoke(g, std::get<U>(t_or_u));
+      return std::invoke(g, t_or_u.right());
   };
 }
 
@@ -690,8 +793,8 @@ TEST_CASE("fanin as expected") {
   auto A_to_bool = [](A) { return true; };
   auto B_to_bool = [](B) { return false; };
 
-  auto really_a = S<A, B>{A{}};
-  auto really_b = S<A, B>{B{}};
+  auto really_a = S<A, B>{Left<A>{}};
+  auto really_b = S<A, B>{Right<B>{}};
 
   auto AorB_to_bool = fanin(A_to_bool, B_to_bool);
 
@@ -701,43 +804,209 @@ TEST_CASE("fanin as expected") {
 
 // ((A → B), (C → D)) → (A + C → B + D)
 template <typename Fn, typename Gn>
-auto coprod(Fn f, Gn g) -> Hom<std::variant<Dom<Fn>, Dom<Gn>>,
-    std::variant<Cod<Fn>, Cod<Gn>>> {
+auto coprod(Fn f, Gn g)
+    -> Hom<S<Dom<Fn>, Dom<Gn>>, S<Cod<Fn>, Cod<Gn>>> {
   using T = Dom<Fn>;
   using U = Dom<Gn>;
   using X = Cod<Fn>;
   using Y = Cod<Gn>;
-  using TorU = std::variant<T, U>;
-  using XorY = std::variant<X, Y>;
+  using TorU = S<T, U>;
+  using XorY = S<X, Y>;
 
   return [f, g](TorU t_or_u) -> XorY {
-    if (std::holds_alternative<T>(t_or_u))
-      return std::invoke(f, std::get<T>(t_or_u));
+    if (util::holds_alternative<Left<T>>(t_or_u))
+      return Left<X>{std::invoke(f, t_or_u.left())};
     else
-      return std::invoke(g, std::get<U>(t_or_u));
+      return Right<Y>{std::invoke(g, t_or_u.right())};
   };
 }
 
 TEST_CASE("Coproduct of functions as expected") {
-  REQUIRE(std::holds_alternative<B>(coprod(f, h)(A{})));
-  REQUIRE(std::holds_alternative<D>(coprod(f, h)(C{})));
+
+  auto gf = Hom<A, C>{compose(g, f)};
+
+  REQUIRE((coprod(f, gf)(Left<A>{})).left() == B{});
+  REQUIRE((coprod(f, gf)(Right<A>{})).right() == C{});
+
+  REQUIRE((coprod(f, h)(Left<A>{})).left() == B{});
+  REQUIRE((coprod(f, h)(Right<C>{})).right() == D{});
 }
 
 // ........................................................ f]]]2
-// Monoidal coproduct ..................................... f[[[2
+// Coproduct associator ................................... f[[[2
 
-struct Never { // Monoidal unit for variant.
-  Never() = delete;
-  Never(const Never &) = delete;
+template <typename T, typename U, typename V>
+auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
+  if (util::holds_alternative<Left<T>>(tl_ulv))
+    return Left<S<T, U>>{Left<T>{tl_ulv.left()}};
+  else {
+    auto &ulv = tl_ulv.right();
+    if (util::holds_alternative<Left<U>>(ulv))
+      return Left<S<T, U>>{Right<U>{ulv.left()}};
+    else
+      return Right<V>{ulv.right()};
+  }
+}
+
+template <typename T, typename U, typename V>
+auto coassociator_rv(S<S<T, U>, V> tlu_lv) -> S<T, S<U, V>> {
+  if (util::holds_alternative<Left<S<T, U>>>(tlu_lv)) {
+    auto &tlu = tlu_lv.left();
+    if (util::holds_alternative<Left<T>>(tlu))
+      return Left<T>{tlu.left()};
+    else
+      return Right<S<U, V>>{Left<U>{tlu.right()}};
+  } else {
+    return Right<S<U, V>>{Right<V>{tlu_lv.right()}};
+  }
+}
+
+TEST_CASE(
+    "coassociator_fd and coassociator_rv are mutually "
+    "inverse.") {
+  // clang-format off
+  auto coassociator_fd_rv = compose(
+        coassociator_rv<A, B, C>,
+        coassociator_fd<A, B, C>
+      );
+  auto coassociator_rv_fd = compose(
+        coassociator_fd<A, B, C>,
+        coassociator_rv<A, B, C>
+      );
+  // clang-format on
+
+  auto a_bc = S<A, S<B, C>>{Left<A>{}};
+  REQUIRE(coassociator_fd_rv(a_bc) == id<S<A, S<B, C>>>(a_bc));
+  auto ab_c = S<S<A, B>, C>{Right<C>{}};
+  REQUIRE(coassociator_rv_fd(ab_c) == id<S<S<A, B>, C>>(ab_c));
+}
+
+TEST_CASE("Associator diagram for coproduct") {
+  auto start = S<A, S<B, S<C, D>>>{};
+
+  // clang-format off
+  auto cw_path = compose(
+        coassociator_fd<S<A, B>, C, D>,
+        coassociator_fd<A, B, S<C, D>>
+      );
+
+  auto ccw_path = compose(
+        coprod(coassociator_fd<A, B, C>, id<D>),
+        coassociator_fd<A, S<B, C>, D>,
+        coprod(id<A>, coassociator_fd<B, C, D>)
+      );
+  // clang-format on
+
+  REQUIRE(ccw_path(start) == cw_path(start));
 };
 
-TEST_CASE("") {
-  auto a = std::variant<Never, int>{4};
-  REQUIRE(std::get<int>(a) == 4);
+// ........................................................ f]]]2
+// Corpdocut unitor ....................................... f[[[2
+
+template <typename T>
+struct LeftOrRight<T, Never> : std::variant<Left<T>, Right<Never>> {
+  using std::variant<Left<T>, Right<Never>>::variant;
+
+  LeftOrRight()
+      : std::variant<Left<T>, Right<Never>>{Left<T>{}} {}
+
+  LeftOrRight(const LeftOrRight &other)
+      : std::variant<Left<T>, Right<Never>>(
+            std::in_place_type<Left<T>>, Left<T>{other.left()}) {
+  }
+
+  [[nodiscard]] const T &left() const {
+    return std::get<Left<T>>(*this).value;
+  }
+
+  [[nodiscard]] const T &right() const {
+    throw std::bad_variant_access();
+  }
+};
+
+template <typename T>
+struct LeftOrRight<Never, T>
+    : std::variant<Left<Never>, Right<T>> {
+  using std::variant<Left<Never>, Right<T>>::variant;
+
+  LeftOrRight()
+      : std::variant<Left<Never>, Right<T>>{Right<T>{}} {}
+
+  LeftOrRight(const LeftOrRight &other)
+      : std::variant<Left<Never>, Right<T>>(
+            std::in_place_type<Right<T>>,
+            Right<T>{other.right()}) {}
+
+  [[nodiscard]] const T &left() const {
+    throw std::bad_variant_access();
+  }
+
+  [[nodiscard]] const T &right() const {
+    return std::get<Right<T>>(*this).value;
+  }
+};
+
+template <typename T>
+auto l_counitor_fw(S<Never, T> just_t) -> T {
+  return just_t.right();
 }
+
+template <typename T>
+auto l_counitor_rv(T t) -> S<Never, T> {
+  return Right<T>{t};
+}
+
+template <typename T>
+auto r_counitor_fw(S<T, Never> just_t) -> T {
+  return just_t.left();
+}
+
+template <typename T>
+auto r_counitor_rv(T t) -> S<T, Never> {
+  return Left<T>{t};
+}
+
+TEST_CASE("_fw and _rv are mutual inverses for L-/R-counitor") {
+  auto ra = S<Never, A>{Right<A>{}};
+  auto la = S<A, Never>{Left<A>{}};
+
+  // clang-format off
+  REQUIRE(
+      compose(l_counitor_rv<A>, l_counitor_fw<A>)(ra) ==
+          id<S<Never, A>>(ra)
+  );
+  REQUIRE(
+      compose(l_counitor_fw<A>, l_counitor_rv<A>)(A{}) ==
+          id<A>(A{})
+  );
+
+  REQUIRE(
+      compose(r_counitor_rv<A>, r_counitor_fw<A>)(la) ==
+          id<S<A, Never>>(la)
+  );
+  REQUIRE(compose(r_counitor_fw<A>, r_counitor_rv<A>)(A{}) == 
+          id<A>(A{})
+  );
+  // clang-format on
+}
+
+// TEST_CASE("counitor diagram") {
+//   auto a_or_rb = S<A, S<Never, B>>{Left<A>{}};
+//
+//   // clang-format off
+//   auto cw_path = compose(
+//         coprod(r_counitor_fw<A>, id<B>),
+//         coassociator_fd<A, Never, B>
+//       );
+//   auto ccw_path = coprod(id<A>, l_counitor_fw<B>);
+//   // clang-format on
+//
+//   coassociator_fd<A, Never, B>(a_or_rb);
+//
+//   // REQUIRE(cw_path(a_or_rb) == ccw_path(a_or_b));
+// }
 
 // ........................................................ f]]]2
 // Product distributes over coproduct ..................... f[[[2
-
 // ........................................................ f]]]2
 // ........................................................ f]]]1
