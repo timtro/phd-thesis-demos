@@ -684,9 +684,7 @@ struct Right {
 struct Never { // Monoidal unit for LeftOrRight.
   Never() = delete;
   Never(const Never &) = delete;
-  bool operator==(const Never&) const {
-    return false;
-  }
+  bool operator==(const Never &) const { return false; }
 };
 
 namespace util {
@@ -696,7 +694,7 @@ namespace util {
     if constexpr (
         std::is_same_v<T, Left<Never>> ||
         std::is_same_v<T, Right<Never>>) {
-      return true;
+      return false; // We will never see a Never value.
     } else {
       return std::holds_alternative<T>(v);
     }
@@ -837,14 +835,27 @@ TEST_CASE("Coproduct of functions as expected") {
 
 template <typename T, typename U, typename V>
 auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
-  if (util::holds_alternative<Left<T>>(tl_ulv))
-    return Left<S<T, U>>{Left<T>{tl_ulv.left()}};
-  else {
+  if (util::holds_alternative<Left<T>>(tl_ulv)) {
+    if constexpr (std::is_same_v<T, Never>) {
+      throw std::bad_variant_access();
+    } else {
+      return Left<S<T, U>>{Left<T>{tl_ulv.left()}};
+    }
+  } else {
     auto &ulv = tl_ulv.right();
-    if (util::holds_alternative<Left<U>>(ulv))
-      return Left<S<T, U>>{Right<U>{ulv.left()}};
-    else
-      return Right<V>{ulv.right()};
+    if (util::holds_alternative<Left<U>>(ulv)) {
+      if constexpr (std::is_same_v<U, Never>) {
+        throw std::bad_variant_access();
+      } else {
+        return Left<S<T, U>>{Right<U>{ulv.left()}};
+      }
+    } else {
+      if constexpr (std::is_same_v<V, Never>) {
+        throw std::bad_variant_access();
+      } else {
+        return Right<V>{ulv.right()};
+      }
+    }
   }
 }
 
@@ -852,12 +863,25 @@ template <typename T, typename U, typename V>
 auto coassociator_rv(S<S<T, U>, V> tlu_lv) -> S<T, S<U, V>> {
   if (util::holds_alternative<Left<S<T, U>>>(tlu_lv)) {
     auto &tlu = tlu_lv.left();
-    if (util::holds_alternative<Left<T>>(tlu))
-      return Left<T>{tlu.left()};
-    else
-      return Right<S<U, V>>{Left<U>{tlu.right()}};
+    if (util::holds_alternative<Left<T>>(tlu)) {
+      if constexpr (std::is_same_v<T, Never>) {
+        throw std::bad_variant_access();
+      } else {
+        return Left<T>{tlu.left()};
+      }
+    } else {
+      if constexpr (std::is_same_v<U, Never>) {
+        throw std::bad_variant_access();
+      } else {
+        return Right<S<U, V>>{Left<U>{tlu.right()}};
+      }
+    }
   } else {
-    return Right<S<U, V>>{Right<V>{tlu_lv.right()}};
+    if constexpr (std::is_same_v<V, Never>) {
+      throw std::bad_variant_access();
+    } else {
+      return Right<S<U, V>>{Right<V>{tlu_lv.right()}};
+    }
   }
 }
 
@@ -904,7 +928,8 @@ TEST_CASE("Associator diagram for coproduct") {
 // Corpdocut unitor ....................................... f[[[2
 
 template <typename T>
-struct LeftOrRight<T, Never> : std::variant<Left<T>, Right<Never>> {
+struct LeftOrRight<T, Never>
+    : std::variant<Left<T>, Right<Never>> {
   using std::variant<Left<T>, Right<Never>>::variant;
 
   LeftOrRight()
@@ -990,21 +1015,21 @@ TEST_CASE("_fw and _rv are mutual inverses for L-/R-counitor") {
   // clang-format on
 }
 
-// TEST_CASE("counitor diagram") {
-//   auto a_or_rb = S<A, S<Never, B>>{Left<A>{}};
-//
-//   // clang-format off
-//   auto cw_path = compose(
-//         coprod(r_counitor_fw<A>, id<B>),
-//         coassociator_fd<A, Never, B>
-//       );
-//   auto ccw_path = coprod(id<A>, l_counitor_fw<B>);
-//   // clang-format on
-//
-//   coassociator_fd<A, Never, B>(a_or_rb);
-//
-//   // REQUIRE(cw_path(a_or_rb) == ccw_path(a_or_b));
-// }
+TEST_CASE("Unitor diagram for coproduct") {
+  auto a_or_rb = S<A, S<Never, B>>{Left<A>{}};
+
+  // clang-format off
+  auto cw_path = compose(
+        coprod(r_counitor_fw<A>, id<B>),
+        coassociator_fd<A, Never, B>
+      );
+  auto ccw_path = coprod(id<A>, l_counitor_fw<B>);
+  // clang-format on
+
+  coassociator_fd<A, Never, B>(a_or_rb);
+
+  REQUIRE(cw_path(a_or_rb) == ccw_path(a_or_rb));
+}
 
 // ........................................................ f]]]2
 // Product distributes over coproduct ..................... f[[[2
