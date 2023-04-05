@@ -718,6 +718,16 @@ public:
 template <typename T, typename U>
 using S = LeftOrRight<T, U>;
 
+template <typename T, typename U>
+auto inject_l(T t) -> S<T, U> {
+  return Left<T>{t};
+}
+
+template <typename T, typename U>
+auto inject_r(U t) -> S<T, U> {
+  return Right<U>{t};
+}
+
 struct Either : public Bifunctor<Either, LeftOrRight> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
@@ -739,8 +749,8 @@ struct Either : public Bifunctor<Either, LeftOrRight> {
 
 TEST_CASE("P is functorial in the left- and right-position.") {
 
-  auto just_a = Either::Of<A, B>{Left<A>{}};
-  auto just_b = Either::Of<A, B>{Right<B>{}};
+  auto just_a = inject_l<A, B>(A{});
+  auto just_b = inject_r<A, B>(B{});
 
   // clang-format off
   REQUIRE(
@@ -791,8 +801,8 @@ TEST_CASE("fanin as expected") {
   auto A_to_bool = [](A) { return true; };
   auto B_to_bool = [](B) { return false; };
 
-  auto really_a = S<A, B>{Left<A>{}};
-  auto really_b = S<A, B>{Right<B>{}};
+  auto really_a = inject_l<A, B>(A{});
+  auto really_b = inject_r<A, B>(B{});
 
   auto AorB_to_bool = fanin(A_to_bool, B_to_bool);
 
@@ -1033,5 +1043,39 @@ TEST_CASE("Unitor diagram for coproduct") {
 
 // ........................................................ f]]]2
 // Product distributes over coproduct ..................... f[[[2
+
+template <typename T, typename U>
+auto cobraid(S<T, U> t_or_u) -> S<U, T> {
+  if (util::holds_alternative<Left<T>>(t_or_u))
+    return S<U, T>{Right<T>{t_or_u.left()}};
+  else
+    return S<U, T>{Left<U>{t_or_u.right()}};
+}
+
+TEST_CASE("Braiding of coproduct is self-inverse") {
+  auto ab = S<A, B>{};
+  REQUIRE(cobraid(cobraid(ab)) == id<S<A, B>>(ab));
+}
+
+TEST_CASE("Braiding diagram 1 for coproduct") {
+  auto start =
+      compose(inject_l<S<A, B>, C>, inject_r<A, B>)(B{});
+
+  // clang-format off
+  auto cw_path = compose(
+        coprod(cobraid<C, A>, id<B>),
+        coassociator_fd<C, A, B>,
+        cobraid<S<A, B>, C>
+      );
+  auto ccw_path = compose(
+        coassociator_fd<A, C, B>,
+        coprod(id<A>, cobraid<B, C>),
+        coassociator_rv<A, B, C>
+      );
+  // clang-format on
+
+  REQUIRE(cw_path(start) == ccw_path(start));
+}
+
 // ........................................................ f]]]2
 // ........................................................ f]]]1
