@@ -1042,7 +1042,7 @@ TEST_CASE("Unitor diagram for coproduct") {
 }
 
 // ........................................................ f]]]2
-// Product distributes over coproduct ..................... f[[[2
+// Coproduct symmetric braiding ........................... f[[[2
 
 template <typename T, typename U>
 auto cobraid(S<T, U> t_or_u) -> S<U, T> {
@@ -1075,6 +1075,59 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
   // clang-format on
 
   REQUIRE(cw_path(start) == ccw_path(start));
+}
+// ........................................................ f]]]2
+// Product distributes over coproduct ..................... f[[[2
+
+// BUG: I am not going to pessimise the `distributor`
+//   against T,U,X = Never, because the nesting is just too hard
+//   to read for thesis code, and I only need to get the point
+//   across.
+
+template <typename T, typename U, typename X>
+auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X>{
+  if (util::holds_alternative<Left<P<T, X>>>(tx_ux)) {
+    auto [t, x] = tx_ux.left();
+    return {{Left<T>{t}}, x};
+  } else {
+    auto [u, x] = tx_ux.right();
+    return {{Right<U>{u}}, x};
+  }
+}
+
+template <typename T, typename U, typename X>
+auto distributor_rv(P<S<T, U>, X> t_or_u_and_x) -> S<P<T, X>, P<U, X>> {
+  auto [t_u, x] = t_or_u_and_x;
+  if (util::holds_alternative<Left<T>>(t_u))
+    return Left<P<T, X>>{{t_u.left(), x}};
+  else
+    return Right<P<U, X>>{{t_u.right(), x}};
+}
+
+TEST_CASE("Distributor is an isomorphism") {
+
+  auto values_fw_rv = std::vector<S<P<A, C>, P<B, C>>>{
+    Left<P<A, C>>{{A{}, C{}}},
+    Right<P<B, C>>{{B{}, C{}}},
+  };
+
+  auto fw_rv = compose(distributor_rv<A, B, C>, distributor_fw<A, B, C>);
+
+  for (auto each: values_fw_rv){
+    REQUIRE(fw_rv(each) == id<S<P<A, C>, P<B, C>>>(each));
+  }
+
+  auto values_rv_fw = std::vector<P<S<A, B>, C>>{
+    {Left<A>{A{}}, C{}},
+    {Right<B>{B{}}, C{}}
+  };
+
+  auto rv_fw = compose(distributor_fw<A, B, C>, distributor_rv<A, B, C>);
+
+  for (auto each: values_rv_fw){
+    REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
+  }
+
 }
 
 // ........................................................ f]]]2
