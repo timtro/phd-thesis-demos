@@ -449,14 +449,24 @@ auto fanout(Fn f, Gn g) {
   };
 }
 
-TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
+TEST_CASE("Coherence of $\\eqref{cd:cpp:binary-product}$") {
   auto A_to_B = [](A) { return B{}; };
   auto A_to_C = [](A) { return C{}; };
 
   auto A_to_BxC = fanout(A_to_B, A_to_C);
 
-  REQUIRE(std::get<0>(A_to_BxC(A{})) == A_to_B(A{}));
-  REQUIRE(std::get<1>(A_to_BxC(A{})) == A_to_C(A{}));
+  SECTION("Euation defining fanout.") {
+    REQUIRE(
+        fanout(compose(proj_l<B, C>, A_to_BxC),
+            compose(proj_r<B, C>, A_to_BxC))(A{}) ==
+        A_to_BxC(A{}));
+  }
+
+  SECTION("Commutativity of left and right triangles in "
+          "$\\eqref{cd:cpp:binary-product}$") {
+    REQUIRE(proj_l(A_to_BxC(A{})) == A_to_B(A{}));
+    REQUIRE(proj_r(A_to_BxC(A{})) == A_to_C(A{}));
+  }
 }
 
 // ........................................................ f]]]3
