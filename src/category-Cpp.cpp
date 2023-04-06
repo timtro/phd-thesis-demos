@@ -754,6 +754,65 @@ auto inject_r(U t) -> S<T, U> {
   return Right<U>{t};
 }
 
+template <typename Fn, typename Gn>
+auto fanin(Fn f, Gn g) {
+  return [f, g](auto t_or_u) {
+    using T = typename decltype(t_or_u)::Left_t;
+    using U = typename decltype(t_or_u)::Right_t;
+
+    static_assert(std::is_invocable_v<Fn, T>);
+    static_assert(std::is_invocable_v<Gn, U>);
+
+    if (util::holds_alternative<Left<T>>(t_or_u))
+      return std::invoke(f, t_or_u.left());
+    else
+      return std::invoke(g, t_or_u.right());
+  };
+}
+
+// ((A → B), (C → D)) → (A + C → B + D)
+template <typename Fn, typename Gn>
+auto coprod(Fn f, Gn g)
+    -> Hom<S<Dom<Fn>, Dom<Gn>>, S<Cod<Fn>, Cod<Gn>>> {
+  using T = Dom<Fn>;
+  using U = Dom<Gn>;
+  using X = Cod<Fn>;
+  using Y = Cod<Gn>;
+  using TorU = S<T, U>;
+  using XorY = S<X, Y>;
+
+  return [f, g](TorU t_or_u) -> XorY {
+    if (util::holds_alternative<Left<T>>(t_or_u))
+      return Left<X>{std::invoke(f, t_or_u.left())};
+    else
+      return Right<Y>{std::invoke(g, t_or_u.right())};
+  };
+}
+
+TEST_CASE("Coproduct diagram triangles commute, and fanin") {
+
+  SECTION("Equation defining fanin") {
+    auto a_or_b_to_c = [](S<A, B>) { return C{}; };
+    REQUIRE(
+        fanin(compose(a_or_b_to_c, inject_l<A, B>),
+            compose(a_or_b_to_c, inject_r<A, B>))(S<A, B>{
+            Left<A>{}}) == a_or_b_to_c(S<A, B>{Left<A>{}}));
+  }
+
+  SECTION("Commutativity of left and right triangles in "
+          "coproduct diagram") {
+    auto a_to_c = [](A) { return C{}; };
+    auto b_to_c = [](B) { return C{}; };
+
+    REQUIRE(
+        compose(fanin(a_to_c, b_to_c), inject_l<A, B>)(A{}) ==
+        a_to_c(A{}));
+    REQUIRE(
+        compose(fanin(a_to_c, b_to_c), inject_r<A, B>)(B{}) ==
+        b_to_c(B{}));
+  }
+}
+
 struct Either : public Bifunctor<Either, LeftOrRight> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
@@ -804,41 +863,6 @@ TEST_CASE("P is functorial in the left- and right-position.") {
           id<S<A, B>>(just_a));
   REQUIRE(Either::bimap(id<A>, id<B>)(just_b) ==
           id<S<A, B>>(just_b));
-}
-
-template <typename Fn, typename Gn>
-auto fanin(Fn f, Gn g) {
-  return [f, g](auto t_or_u) {
-    using T = typename decltype(t_or_u)::Left_t;
-    using U = typename decltype(t_or_u)::Right_t;
-
-    static_assert(std::is_invocable_v<Fn, T>);
-    static_assert(std::is_invocable_v<Gn, U>);
-
-    if (util::holds_alternative<Left<T>>(t_or_u))
-      return std::invoke(f, t_or_u.left());
-    else
-      return std::invoke(g, t_or_u.right());
-  };
-}
-
-// ((A → B), (C → D)) → (A + C → B + D)
-template <typename Fn, typename Gn>
-auto coprod(Fn f, Gn g)
-    -> Hom<S<Dom<Fn>, Dom<Gn>>, S<Cod<Fn>, Cod<Gn>>> {
-  using T = Dom<Fn>;
-  using U = Dom<Gn>;
-  using X = Cod<Fn>;
-  using Y = Cod<Gn>;
-  using TorU = S<T, U>;
-  using XorY = S<X, Y>;
-
-  return [f, g](TorU t_or_u) -> XorY {
-    if (util::holds_alternative<Left<T>>(t_or_u))
-      return Left<X>{std::invoke(f, t_or_u.left())};
-    else
-      return Right<Y>{std::invoke(g, t_or_u.right())};
-  };
 }
 
 TEST_CASE("Coproduct of functions as expected") {
