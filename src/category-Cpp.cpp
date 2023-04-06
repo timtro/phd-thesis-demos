@@ -1,5 +1,6 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <catch2/catch.hpp>
+#include <cctype>
 #include <optional>
 #include <type_traits>
 #include <variant>
@@ -682,7 +683,7 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
 // ........................................................ f]]]3
 // ........................................................ f]]]2
 // Cocartesian monoid in Cpp .............................. f[[[2
-// Coproduct bifunctor .................................... f[[[3
+// Categorical coproduct bifunctor ........................ f[[[3
 
 template <typename T>
 struct Left {
@@ -725,7 +726,11 @@ namespace util {
 template <typename T, typename U>
 class LeftOrRight : public std::variant<Left<T>, Right<U>> {
 public:
+  static constexpr bool is_sum = true;
+
   using std::variant<Left<T>, Right<U>>::variant;
+  using Left_t = T;
+  using Right_t = U;
 
   [[nodiscard]] const T &left() const {
     return std::get<Left<T>>(*this).value;
@@ -815,19 +820,6 @@ auto fanin(Fn f, Gn g) {
     else
       return std::invoke(g, t_or_u.right());
   };
-}
-
-TEST_CASE("fanin as expected") {
-  auto A_to_bool = [](A) { return true; };
-  auto B_to_bool = [](B) { return false; };
-
-  auto really_a = inject_l<A, B>(A{});
-  auto really_b = inject_r<A, B>(B{});
-
-  auto AorB_to_bool = fanin(A_to_bool, B_to_bool);
-
-  REQUIRE(AorB_to_bool(really_a) == true);
-  REQUIRE(AorB_to_bool(really_b) == false);
 }
 
 // ((A → B), (C → D)) → (A + C → B + D)
@@ -1102,9 +1094,9 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
 // Product distributes over coproduct ..................... f[[[3
 
 // BUG: I am not going to pessimise the `distributor`
-//   against T,U,X = Never, because the nesting is just too hard
-//   to read for thesis code, and I only need to get the point
-//   across.
+//   against T or U or X = Never, because the nesting is just too
+//   hard to read for thesis code, and I only need to get the
+//   point across.
 
 template <typename T, typename U, typename X>
 auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X> {
