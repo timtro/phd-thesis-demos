@@ -440,14 +440,13 @@ TEST_CASE(
 }
 
 template <typename Fn, typename Gn>
-auto fanout(Fn f, Gn g) -> Hom<Dom<Fn>, P<Cod<Fn>, Cod<Gn>>> {
-  using T = Dom<Fn>;
-  using U = Cod<Fn>;
-  using V = Cod<Gn>;
+auto fanout(Fn f, Gn g) {
+  return [f, g](auto t) {
+    static_assert(std::is_invocable_v<Fn, decltype(t)>);
+    static_assert(std::is_invocable_v<Gn, decltype(t)>);
 
-  static_assert(std::is_same_v<T, Dom<Gn>>);
-
-  return [f, g](T t) -> P<U, V> { return {f(t), g(t)}; };
+    return std::pair{f(t), g(t)};
+  };
 }
 
 TEST_CASE("Commutativity of $\\eqref{cd:cpp:binary-product}$") {
