@@ -366,6 +366,16 @@ TEST_CASE("Test naturality square for len.") {
 template <typename T, typename U>
 using P = std::pair<T, U>;
 
+template <typename T, typename U>
+auto proj_l(P<T, U> tu) -> T {
+  return std::get<0>(tu);
+}
+
+template <typename T, typename U>
+auto proj_r(P<T, U> tu) -> U {
+  return std::get<1>(tu);
+}
+
 struct Pair : public Bifunctor<Pair, P> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
