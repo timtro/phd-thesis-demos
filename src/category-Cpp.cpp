@@ -802,15 +802,14 @@ TEST_CASE("P is functorial in the left- and right-position.") {
 }
 
 template <typename Fn, typename Gn>
-auto fanin(Fn f, Gn g) -> Hom<S<Dom<Fn>, Dom<Gn>>, Cod<Fn>> {
-  using T = Dom<Fn>;
-  using U = Dom<Gn>;
-  using X = Cod<Fn>;
-  using TorU = S<T, U>;
+auto fanin(Fn f, Gn g) {
+  return [f, g](auto t_or_u) {
+    using T = typename decltype(t_or_u)::Left_t;
+    using U = typename decltype(t_or_u)::Right_t;
 
-  static_assert(std::is_same_v<X, Cod<Gn>>);
+    static_assert(std::is_invocable_v<Fn, T>);
+    static_assert(std::is_invocable_v<Gn, U>);
 
-  return [f, g](TorU t_or_u) -> X {
     if (util::holds_alternative<Left<T>>(t_or_u))
       return std::invoke(f, t_or_u.left());
     else
