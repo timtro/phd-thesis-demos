@@ -363,6 +363,7 @@ TEST_CASE("Test naturality square for len.") {
 // ........................................................ f]]]2
 // CCC in Cpp ............................................. f[[[2
 // Categorical product bifunctor .......................... f[[[3
+
 template <typename T, typename U>
 using P = std::pair<T, U>;
 
@@ -680,7 +681,8 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
 }
 // ........................................................ f]]]3
 // ........................................................ f]]]2
-// Coproduct bifunctor .................................... f[[[2
+// Cocartesian monoid in Cpp .............................. f[[[2
+// Coproduct bifunctor .................................... f[[[3
 
 template <typename T>
 struct Left {
@@ -859,8 +861,8 @@ TEST_CASE("Coproduct of functions as expected") {
   REQUIRE((coprod(f, h)(Right<C>{})).right() == D{});
 }
 
-// ........................................................ f]]]2
-// Coproduct associator ................................... f[[[2
+// ........................................................ f]]]3
+// Coproduct associator ................................... f[[[3
 
 template <typename T, typename U, typename V>
 auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
@@ -953,8 +955,8 @@ TEST_CASE("Associator diagram for coproduct") {
   REQUIRE(ccw_path(start) == cw_path(start));
 };
 
-// ........................................................ f]]]2
-// Corpdocut unitor ....................................... f[[[2
+// ........................................................ f]]]3
+// Corpdocut unitor ....................................... f[[[3
 
 template <typename T>
 struct LeftOrRight<T, Never>
@@ -1060,8 +1062,8 @@ TEST_CASE("Unitor diagram for coproduct") {
   REQUIRE(cw_path(a_or_rb) == ccw_path(a_or_rb));
 }
 
-// ........................................................ f]]]2
-// Coproduct symmetric braiding ........................... f[[[2
+// ........................................................ f]]]3
+// Coproduct symmetric braiding ........................... f[[[3
 
 template <typename T, typename U>
 auto cobraid(S<T, U> t_or_u) -> S<U, T> {
@@ -1095,8 +1097,10 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
 
   REQUIRE(cw_path(start) == ccw_path(start));
 }
+// ........................................................ f]]]3
 // ........................................................ f]]]2
-// Product distributes over coproduct ..................... f[[[2
+// BiCCC: currying/product equations ...................... f[[[2
+// Product distributes over coproduct ..................... f[[[3
 
 // BUG: I am not going to pessimise the `distributor`
 //   against T,U,X = Never, because the nesting is just too hard
@@ -1104,7 +1108,7 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
 //   across.
 
 template <typename T, typename U, typename X>
-auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X>{
+auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X> {
   if (util::holds_alternative<Left<P<T, X>>>(tx_ux)) {
     auto [t, x] = tx_ux.left();
     return {{Left<T>{t}}, x};
@@ -1115,7 +1119,8 @@ auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X>{
 }
 
 template <typename T, typename U, typename X>
-auto distributor_rv(P<S<T, U>, X> t_or_u_and_x) -> S<P<T, X>, P<U, X>> {
+auto distributor_rv(P<S<T, U>, X> t_or_u_and_x)
+    -> S<P<T, X>, P<U, X>> {
   auto [t_u, x] = t_or_u_and_x;
   if (util::holds_alternative<Left<T>>(t_u))
     return Left<P<T, X>>{{t_u.left(), x}};
@@ -1126,28 +1131,28 @@ auto distributor_rv(P<S<T, U>, X> t_or_u_and_x) -> S<P<T, X>, P<U, X>> {
 TEST_CASE("Distributor is an isomorphism") {
 
   auto values_fw_rv = std::vector<S<P<A, C>, P<B, C>>>{
-    Left<P<A, C>>{{A{}, C{}}},
-    Right<P<B, C>>{{B{}, C{}}},
+      Left<P<A, C>>{{A{}, C{}}},
+      Right<P<B, C>>{{B{}, C{}}},
   };
 
-  auto fw_rv = compose(distributor_rv<A, B, C>, distributor_fw<A, B, C>);
+  auto fw_rv =
+      compose(distributor_rv<A, B, C>, distributor_fw<A, B, C>);
 
-  for (auto each: values_fw_rv){
+  for (auto each : values_fw_rv) {
     REQUIRE(fw_rv(each) == id<S<P<A, C>, P<B, C>>>(each));
   }
 
   auto values_rv_fw = std::vector<P<S<A, B>, C>>{
-    {Left<A>{A{}}, C{}},
-    {Right<B>{B{}}, C{}}
-  };
+      {Left<A>{A{}}, C{}}, {Right<B>{B{}}, C{}}};
 
-  auto rv_fw = compose(distributor_fw<A, B, C>, distributor_rv<A, B, C>);
+  auto rv_fw =
+      compose(distributor_fw<A, B, C>, distributor_rv<A, B, C>);
 
-  for (auto each: values_rv_fw){
+  for (auto each : values_rv_fw) {
     REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
   }
-
 }
 
+// ........................................................ f]]]3
 // ........................................................ f]]]2
 // ........................................................ f]]]1
