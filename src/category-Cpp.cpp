@@ -198,7 +198,7 @@ TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
 template <typename T>
 using IdType = T;
 
-struct Id : public Functor<Id, IdType> {
+struct Id : Functor<Id, IdType> {
   template <typename Fn>
   static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return fn;
@@ -220,7 +220,7 @@ TEST_CASE("Check the functor laws for IdF") {
 // ........................................................ f]]]2
 // Optional functor ....................................... f[[[2
 
-struct Optional : public Functor<Optional, std::optional> {
+struct Optional : Functor<Optional, std::optional> {
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
@@ -271,7 +271,7 @@ TEST_CASE("Check the functor laws for Optional::fmap") {
 // ........................................................ f]]]2
 // std::vector based List-functor ......................... f[[[2
 
-struct Vector : public Functor<Vector, std::vector> {
+struct Vector : Functor<Vector, std::vector> {
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
@@ -313,8 +313,7 @@ struct Always {
 };
 
 template <typename T>
-struct Const
-    : public Functor<Const<T>, Always<T>::template given> {
+struct Const : Functor<Const<T>, Always<T>::template given> {
   template <typename Fn>
   static auto fmap(Fn) -> Hom<T, T> {
     return id<T>;
@@ -378,7 +377,7 @@ auto proj_r(P<T, U> tu) -> U {
   return std::get<1>(tu);
 }
 
-struct Pair : public Bifunctor<Pair, P> {
+struct Pair : Bifunctor<Pair, P> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
     return [f, g](auto tu) {
@@ -656,8 +655,7 @@ struct HomFrom {
 };
 
 template <typename T>
-struct CHom
-    : public Functor<CHom<T>, HomFrom<T>::template HomTo> {
+struct CHom : Functor<CHom<T>, HomFrom<T>::template HomTo> {
   template <typename Fn>
   static auto fmap(Fn f)
       -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
@@ -724,8 +722,7 @@ namespace util {
 } // namespace util
 
 template <typename T, typename U>
-class LeftOrRight : public std::variant<Left<T>, Right<U>> {
-public:
+struct LeftOrRight : std::variant<Left<T>, Right<U>> {
   static constexpr bool is_sum = true;
 
   using std::variant<Left<T>, Right<U>>::variant;
@@ -813,7 +810,7 @@ TEST_CASE("Coproduct diagram triangles commute, and fanin") {
   }
 }
 
-struct Either : public Bifunctor<Either, LeftOrRight> {
+struct Either : Bifunctor<Either, LeftOrRight> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
     using T = Dom<Fn>;
@@ -1169,5 +1166,125 @@ TEST_CASE("Distributor is an isomorphism") {
 }
 
 // ........................................................ f]]]3
+// Cartesian closure laws ................................. f[[[3
+
+template <typename T, typename U>
+auto ev(P<Hom<T, U>, T> fn_and_arg) {
+  auto [f, x] = fn_and_arg;
+  return std::invoke(f, x);
+}
+
+template <typename Fn>
+auto pcurry(Fn f) {
+  return [f](auto t) {
+    return [f, t](auto u) {
+      return std::invoke(f, std::pair{t, u});
+    };
+  };
+}
+
+TEST_CASE("Closure diagram") {
+  auto cb_to_a = [](P<C, B>) { return A{}; };
+  auto c_to_b_to_a = pcurry(cb_to_a);
+
+  auto lhs1 = compose(ev<B, A>,
+      fanout(
+          compose(pcurry(cb_to_a), proj_l<C, B>), proj_r<C, B>));
+
+  REQUIRE(lhs1(P<C, B>{}) == cb_to_a(P<C, B>{}));
+
+  auto lhs2 = pcurry(compose(ev<B, A>,
+      fanout(compose(c_to_b_to_a, proj_l<C, B>), proj_r<C, B>)));
+
+  REQUIRE(lhs2(C{})(B{}) == c_to_b_to_a(C{})(B{}));
+}
+// ........................................................ f]]]3
+// ........................................................ f]]]2
+// Isomorphism between C++ function arguments and tuples .. f[[[2
+
+template <typename Fn>
+auto to_unary(Fn &&f) {
+  return [f = std::forward<Fn>(f)](auto &&args) mutable {
+    return std::apply(f, std::forward<decltype(args)>(args));
+  };
+}
+
+template <typename Fn>
+auto to_n_ary(Fn &&f) {
+  return [f = std::forward<Fn>(f)](auto &&...args) mutable {
+    return f(
+        std::make_tuple(std::forward<decltype(args)>(args)...));
+  };
+}
+
+TEST_CASE("A(T₁, T₂, T₃, …, Tₙ) ≅ A(tuple<T₁, T₂, T₃, …, Tₙ>)") {
+  auto f = [](A, B, C) -> D { return D{}; };
+
+  REQUIRE(
+      to_unary(f)(std::tuple<A, B, C>{}) == f(A{}, B{}, C{}));
+
+  REQUIRE(
+      to_n_ary(to_unary(f))(A{}, B{}, C{}) == f(A{}, B{}, C{}));
+}
+
+// ........................................................ f]]]2
+// OP<T> functor fixpoint ................................. f[[[2
+
+template <template <typename> class F>
+struct Fix : F<Fix<F>> {
+  Fix(F<Fix<F>> f) : F<Fix<F>>(f) {}
+};
+
+template <template <typename> class F>
+Fix<F> Fx(F<Fix<F>> f) {
+  return Fix<F>{f};
+}
+
+template <template <typename> class F>
+F<Fix<F>> unFix(Fix<F> f) {
+  return f;
+}
+
+template <template <typename> class F>
+struct AnyF {
+  template <typename T>
+  operator F<T> &() const;
+};
+
+template <typename T>
+using O = std::optional<T>;
+
+template <typename T>
+struct OP {
+  template <typename U>
+  using With = O<P<std::shared_ptr<U>, T>>;
+};
+
+template <typename T>
+using OPA = typename OP<A>::With<T>;
+
+using ListOfA = Fix<OPA>;
+
+auto snoc(ListOfA l, A) -> ListOfA {
+  return Fx<OPA>(
+      std::make_pair(std::make_shared<ListOfA>(l), A{}));
+}
+
+TEST_CASE(
+    "Arbitrary nested optional-pairs isomorphic to "
+    "lists") {
+
+  ListOfA as4 = snoc(snoc(snoc({std::nullopt}, A{}), A{}), A{});
+
+  auto [as3, a3] = *as4;
+  auto [as2, a2] = **as3;
+  auto [as1, a1] = **as2;
+  // auto [as0, a0] = **as1;
+
+  REQUIRE(a1 == A{});
+
+}
+
 // ........................................................ f]]]2
 // ........................................................ f]]]1
+
