@@ -9,8 +9,6 @@
 #include <utility>
 #include <variant>
 
-using std::experimental::is_detected_v;
-
 namespace tf {
   // Tools for categorical notation of arrows ............. f[[[1
   template <typename... Ts>
