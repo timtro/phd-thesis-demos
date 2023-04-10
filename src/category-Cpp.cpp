@@ -1363,15 +1363,13 @@ struct ListF : Functor<ListF<T>, OP<T>::template Fst> {
       }
     };
   }
+
+  template <typename Carrier>
+  using Alg =
+      Hom<typename OP<T>::template Fst<Carrier>, Carrier>;
 };
 
-// using LostOfA_Alg = Hom<OPA<T>, T>;
-
-template <typename Carrier>
-using ListAlg =
-    Hom<typename OP<Carrier>::template Fst<Carrier>, Carrier>;
-
-ListAlg<int> sum_alg = [](auto op) -> int {
+ListF<int>::Alg<int> sum_alg = [](auto op) -> int {
   if (op.has_value()) {
     auto [l, r] = op.value();
     return *l + r;
@@ -1380,7 +1378,7 @@ ListAlg<int> sum_alg = [](auto op) -> int {
   }
 };
 
-ListAlg<int> len_alg = [](auto op) -> int {
+auto len_alg = [](auto op) -> int {
   if (op.has_value()) {
     auto [l, r] = op.value();
     return *l + 1;
@@ -1389,26 +1387,32 @@ ListAlg<int> len_alg = [](auto op) -> int {
   }
 };
 
-template <typename T>
-auto list_cata(ListAlg<T> alg) -> Hom<List<T>, T> {
-  return [alg](List<T> ts) {
-    return alg(ListF<T>::fmap(list_cata(alg))(out(ts)));
+template <typename Carrier, typename Elem>
+auto list_cata(typename ListF<Elem>::template Alg<Carrier> alg)
+    -> Hom<List<Elem>, Carrier> {
+  return [alg](List<Elem> ts) {
+    return alg(ListF<Elem>::fmap(list_cata<Carrier, Elem>(alg))(
+        out(ts)));
   };
 }
 
-TEST_CASE("") {
+TEST_CASE(
+    "Testing catamorphisms with sum algebra on integer "
+    "lists, and length algebras on integer- and "
+    "A-lists") {
   auto list_ints = snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
 
-  auto sum_list = list_cata(sum_alg);
-  auto sum = sum_list(list_ints);
+  auto sum_int_list = list_cata<int, int>(sum_alg);
+  auto sum = sum_int_list(list_ints);
   REQUIRE(sum == 1 + 2 + 3 + 4);
 
-  auto len_list = list_cata(len_alg);
-  auto len = len_list(list_ints);
+  auto len_int_list = list_cata<int, int>(len_alg);
+  auto len = len_int_list(list_ints);
   REQUIRE(len == 4);
 
   auto list_as = snoc(snoc(nil<A>, A{}), A{});
-  REQUIRE(len_list(list_as) == 2);
+  auto len_a_list = list_cata<int, A>(len_alg);
+  REQUIRE(len_a_list(list_as) == 2);
 }
 
 // ........................................................ f]]]3
