@@ -1253,15 +1253,15 @@ using O = std::optional<T>;
 template <typename T>
 struct OP {
   template <typename U>
-  using RecursiveIn = O<P<std::shared_ptr<U>, T>>;
+  using Fst = O<P<std::shared_ptr<U>, T>>;
 };
 
 template <typename T>
-using List = Fix<OP<T>::template RecursiveIn>;
+using List = Fix<OP<T>::template Fst>;
 
 template <typename T>
 auto snoc(List<T> l, T t) -> List<T> {
-  return in<OP<T>::template RecursiveIn>(
+  return in<OP<T>::template Fst>(
       std::make_pair(std::make_shared<List<T>>(l), t));
 }
 
@@ -1293,8 +1293,7 @@ auto to_vector(const Lst l)
 template <typename T>
 auto to_snoclist(const std::vector<T> &vec) -> List<T> {
 
-  List<T> accumulator =
-      in<OP<T>::template RecursiveIn>(std::nullopt);
+  List<T> accumulator = in<OP<T>::template Fst>(std::nullopt);
 
   for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
     accumulator = snoc(accumulator, *it);
@@ -1324,7 +1323,7 @@ auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
 }
 
 template <typename T>
-auto nil = in<OP<T>::template RecursiveIn>(std::nullopt);
+auto nil = in<OP<T>::template Fst>(std::nullopt);
 
 TEST_CASE(
     "Arbitrary nested optional-pairs isomorphic to "
@@ -1346,5 +1345,72 @@ TEST_CASE(
           std::vector{1, 2, 3});
 }
 
+// List<T>-catamorphisms .................................. f[[[3
+
+template <typename T>
+struct ListF : Functor<ListF<T>, OP<T>::template Fst> {
+  template <typename Fn>
+  static auto fmap(Fn fn) {
+    return [fn](auto op)
+               -> typename OP<T>::template Fst<Cod<Fn>> {
+      if (op.has_value()) {
+        auto [left, right] = op.value();
+        auto result = fn(*left);
+        return std::make_optional(std::make_pair(
+            std::make_shared<decltype(result)>(result), right));
+      } else {
+        return std::nullopt;
+      }
+    };
+  }
+};
+
+// using LostOfA_Alg = Hom<OPA<T>, T>;
+
+template <typename Carrier>
+using ListAlg =
+    Hom<typename OP<Carrier>::template Fst<Carrier>, Carrier>;
+
+ListAlg<int> sum_alg = [](auto op) -> int {
+  if (op.has_value()) {
+    auto [l, r] = op.value();
+    return *l + r;
+  } else {
+    return 0;
+  }
+};
+
+ListAlg<int> len_alg = [](auto op) -> int {
+  if (op.has_value()) {
+    auto [l, r] = op.value();
+    return *l + 1;
+  } else {
+    return 0;
+  }
+};
+
+template <typename T>
+auto list_cata(ListAlg<T> alg) -> Hom<List<T>, T> {
+  return [alg](List<T> ts) {
+    return alg(ListF<T>::fmap(list_cata(alg))(out(ts)));
+  };
+}
+
+TEST_CASE("") {
+  auto list_ints = snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
+
+  auto sum_list = list_cata(sum_alg);
+  auto sum = sum_list(list_ints);
+  REQUIRE(sum == 1 + 2 + 3 + 4);
+
+  auto len_list = list_cata(len_alg);
+  auto len = len_list(list_ints);
+  REQUIRE(len == 4);
+
+  auto list_as = snoc(snoc(nil<A>, A{}), A{});
+  REQUIRE(len_list(list_as) == 2);
+}
+
+// ........................................................ f]]]3
 // ........................................................ f]]]2
 // ........................................................ f]]]1
