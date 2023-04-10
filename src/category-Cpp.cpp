@@ -5,6 +5,8 @@
 #include <type_traits>
 #include <variant>
 
+#include <list>
+
 #include "Cpp-arrows.hpp"
 
 using tf::Cod;
@@ -1232,24 +1234,18 @@ TEST_CASE("A(T₁, T₂, T₃, …, Tₙ) ≅ A(tuple<T₁, T₂, T₃, …, T�
 
 template <template <typename> class F>
 struct Fix : F<Fix<F>> {
-  Fix(F<Fix<F>> f) : F<Fix<F>>(f) {}
+  explicit Fix(F<Fix<F>> f) : F<Fix<F>>(f) {}
 };
 
 template <template <typename> class F>
-Fix<F> Fx(F<Fix<F>> f) {
+Fix<F> in(F<Fix<F>> f) {
   return Fix<F>{f};
 }
 
 template <template <typename> class F>
-F<Fix<F>> unFix(Fix<F> f) {
+F<Fix<F>> out(Fix<F> f) {
   return f;
 }
-
-template <template <typename> class F>
-struct AnyF {
-  template <typename T>
-  operator F<T> &() const;
-};
 
 template <typename T>
 using O = std::optional<T>;
@@ -1257,34 +1253,98 @@ using O = std::optional<T>;
 template <typename T>
 struct OP {
   template <typename U>
-  using With = O<P<std::shared_ptr<U>, T>>;
+  using RecursiveIn = O<P<std::shared_ptr<U>, T>>;
 };
 
 template <typename T>
-using OPA = typename OP<A>::With<T>;
+using List = Fix<OP<T>::template RecursiveIn>;
 
-using ListOfA = Fix<OPA>;
-
-auto snoc(ListOfA l, A) -> ListOfA {
-  return Fx<OPA>(
-      std::make_pair(std::make_shared<ListOfA>(l), A{}));
+template <typename T>
+auto snoc(List<T> l, T t) -> List<T> {
+  return in<OP<T>::template RecursiveIn>(
+      std::make_pair(std::make_shared<List<T>>(l), t));
 }
+
+template <typename Lst>
+using list_element_type = typename std::remove_reference<
+    decltype(*out(std::declval<Lst>()))>::type::second_type;
+
+static_assert(std::is_same_v<list_element_type<List<int>>, int>);
+
+template <typename Lst>
+auto to_vector(const Lst l)
+    -> std::vector<list_element_type<Lst>> {
+  using T = list_element_type<Lst>;
+  static_assert(std::is_same_v<Lst, List<T>>);
+
+  std::vector<T> output;
+  auto outermost = out(l);
+  while (outermost != std::nullopt) {
+    auto [tail, head] = outermost.value();
+    output.push_back(head);
+    outermost = out(*tail);
+  }
+
+  std::reverse(output.begin(), output.end());
+
+  return output;
+}
+
+template <typename T>
+auto to_snoclist(const std::vector<T> &vec) -> List<T> {
+
+  List<T> accumulator =
+      in<OP<T>::template RecursiveIn>(std::nullopt);
+
+  for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
+    accumulator = snoc(accumulator, *it);
+  }
+
+  return accumulator;
+}
+
+template <typename Lst, typename T = list_element_type<Lst>>
+auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
+  auto l = out(lhs);
+  auto r = out(rhs);
+
+  while (l.has_value() && r.has_value()) {
+    auto [lhs_tail, lhs_val] = l.value();
+    auto [rhs_tail, rhs_val] = r.value();
+    if (!(lhs_val == rhs_val)) {
+      return false;
+    }
+    l = *lhs_tail;
+    r = *rhs_tail;
+  }
+
+  // If one of a or b still holds value at this point, then lhs
+  // and rhs are different lengths and are not equal.
+  return !l.has_value() && !r.has_value();
+}
+
+template <typename T>
+auto nil = in<OP<T>::template RecursiveIn>(std::nullopt);
 
 TEST_CASE(
     "Arbitrary nested optional-pairs isomorphic to "
     "lists") {
 
-  ListOfA as4 = snoc(snoc(snoc({std::nullopt}, A{}), A{}), A{});
+  auto list_as = snoc(snoc(snoc(nil<A>, A{}), A{}), A{});
+  auto vec_as = std::vector{A{}, A{}, A{}};
 
-  auto [as3, a3] = *as4;
-  auto [as2, a2] = **as3;
-  auto [as1, a1] = **as2;
-  // auto [as0, a0] = **as1;
+  auto list_ints = snoc(snoc(snoc(nil<int>, 1), 2), 3);
+  auto vec_ints = std::vector{1, 2, 3};
 
-  REQUIRE(a1 == A{});
+  REQUIRE(to_vector(list_as) == vec_as);
+  REQUIRE(to_vector(list_ints) == vec_ints);
 
+  REQUIRE(list_as == to_snoclist(vec_as));
+  REQUIRE(list_ints == to_snoclist(vec_ints));
+
+  REQUIRE(to_vector(to_snoclist(std::vector{1, 2, 3})) ==
+          std::vector{1, 2, 3});
 }
 
 // ........................................................ f]]]2
 // ........................................................ f]]]1
-
