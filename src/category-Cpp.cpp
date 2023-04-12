@@ -1,4 +1,5 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+#include <bits/utility.h>
 #include <catch2/catch.hpp>
 #include <cctype>
 #include <optional>
@@ -458,7 +459,7 @@ TEST_CASE("Coherence of $\\eqref{cd:cpp:binary-product}$") {
 
   auto A_to_BxC = fanout(A_to_B, A_to_C);
 
-  SECTION("Euation defining fanout.") {
+  SECTION("Equation defining fanout.") {
     REQUIRE(
         fanout(compose(proj_l<B, C>, A_to_BxC),
             compose(proj_r<B, C>, A_to_BxC))(A{}) ==
@@ -1176,16 +1177,49 @@ auto ev(P<Hom<T, U>, T> fn_and_arg) {
   return std::invoke(f, x);
 }
 
-template <typename Fn>
-auto pcurry(Fn f) {
-  return [f](auto t) {
-    return [f, t](auto u) {
+template <typename Fn, typename TU = Dom<Fn>,
+    typename T = std::tuple_element_t<0, TU>,
+    typename U = std::tuple_element_t<1, TU>,
+    typename V = Cod<Fn>>
+auto pcurry(Fn f) -> Hom<T, Hom<U, V>> {
+  return [f](T t) -> Hom<U, V> {
+    return [f, t](U u) -> V {
       return std::invoke(f, std::pair{t, u});
     };
   };
 }
 
-TEST_CASE("Closure diagram") {
+// LaTeX version:
+// TEST_CASE("Commutativity of $\eqref{cd:cpp-exponential}$") {
+TEST_CASE("Commutativity of $\\eqref{cd:cpp-exponential}$") {
+  auto ab = P<A, B>{};
+  auto k = [](P<A, B>) -> C { return {}; };
+
+  auto cw = compose(ev<B, C>, prod(pcurry(k), id<B>));
+
+  REQUIRE(cw(ab) == k(ab));
+}
+
+template <typename Fn>
+auto puncurry(Fn f) {
+  using T = Dom<Fn>;
+  using UtoV = Cod<Fn>;
+  using U = Dom<UtoV>;
+  using V = Cod<UtoV>;
+
+  return [f](std::pair<T, U> p) -> V {
+    return std::invoke(std::invoke(f, p.first), p.second);
+  };
+}
+
+TEST_CASE("pcurry and puncurry are inverse") {
+  auto ab = P<A, B>{};
+  auto k = [](P<A, B>) -> C { return {}; };
+
+  REQUIRE(puncurry(pcurry(k))(ab) == C{});
+}
+
+TEST_CASE("Čubrić (1994) equations.") {
   auto cb_to_a = [](P<C, B>) { return A{}; };
   auto c_to_b_to_a = pcurry(cb_to_a);
 
@@ -1195,8 +1229,16 @@ TEST_CASE("Closure diagram") {
 
   REQUIRE(lhs1(P<C, B>{}) == cb_to_a(P<C, B>{}));
 
-  auto lhs2 = pcurry(compose(ev<B, A>,
-      fanout(compose(c_to_b_to_a, proj_l<C, B>), proj_r<C, B>)));
+  // clang-format off
+  auto lhs2 = pcurry(Hom<P<C,B>, A>{
+        compose(ev<B, A>,
+          fanout(
+            compose(c_to_b_to_a, proj_l<C, B>),
+            proj_r<C, B>
+          )
+        )
+        });
+  // clang-format on
 
   REQUIRE(lhs2(C{})(B{}) == c_to_b_to_a(C{})(B{}));
 }
@@ -1219,7 +1261,11 @@ auto to_n_ary(Fn &&f) {
   };
 }
 
-TEST_CASE("A(T₁, T₂, T₃, …, Tₙ) ≅ A(tuple<T₁, T₂, T₃, …, Tₙ>)") {
+// clang-format off
+// LaTeX version:
+// TEST_CASE("$\\ttf(\\ttT_1, \\ttT_2, \\ttT_3, …, \\ttT_n) ≅ \\ttf(\\std{tuple}\\Targ{\\ttT_1, \\ttT_2, \\ttT_3, …, \\ttT_n})$") {
+// clang-format on
+TEST_CASE("f(T₁, T₂, T₃, …, Tₙ) ≅ f(tuple<T₁, T₂, T₃, …, Tₙ>)") {
   auto f = [](A, B, C) -> D { return D{}; };
 
   REQUIRE(
