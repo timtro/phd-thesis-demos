@@ -733,6 +733,8 @@ TEST_CASE("Čubrić (1994) equations.") {
 template <typename T, typename U>
 struct S : std::variant<T, U> {
   using std::variant<T, U>::variant;
+
+  explicit S() = delete;
 };
 
 struct Never { // Monoidal unit for S
@@ -1086,7 +1088,7 @@ auto cobraid(S<T, U> t_or_u) -> S<U, T> {
 }
 
 TEST_CASE("Braiding of coproduct is self-inverse") {
-  auto ab = S<A, B>{};
+  auto ab = inject_l<A, B>(A{});
   REQUIRE(cobraid(cobraid(ab)) == id<S<A, B>>(ab));
 }
 
