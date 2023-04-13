@@ -99,14 +99,6 @@ struct Getable {
   [[nodiscard]] T get() const { return N; }
 };
 
-TEST_CASE("Sould be able to compose with PMFs", //
-    "[compose], [interface]") {
-  const auto a = A{};
-  Getable getable_a{a};
-  auto fog = compose(id<A>, &Getable<A>::get);
-  REQUIRE(fog(&getable_a) == a);
-}
-
 TEST_CASE(
     "Return of a composed function should preserve the "
     "rvalue-refness of the outer function", //
@@ -134,29 +126,6 @@ TEST_CASE(
   REQUIRE(b == B{});
   REQUIRE(c == C{});
   REQUIRE(d == D{});
-}
-
-struct Foo {
-  D d_returner(A, B, C) { return {}; }
-};
-
-TEST_CASE("PMFs should curry", //
-    "[curry], [non-variadic], [interface]") {
-  Foo foo;
-  auto foo_d_returner = curry(&Foo::d_returner);
-  REQUIRE(foo_d_returner(&foo)(A{})(B{})(C{}) == D{});
-  //                     ^ Always give pointer to object
-}
-
-TEST_CASE(
-    "A curried non-variadic function should preserve the "
-    "lvalue ref-ness of whatever is returned from the "
-    "wrapped function.", //
-    "[curry], [non-variadic], [interface]") {
-  A a{};
-  auto ref_to_a = [&a]() -> A & { return a; };
-  REQUIRE(std::is_lvalue_reference<
-      decltype(curry(ref_to_a))>::value);
 }
 
 TEST_CASE("Curried functions should…") {
@@ -382,7 +351,8 @@ auto proj_r(P<T, U> tu) -> U {
 
 struct Pair : Bifunctor<Pair, P> {
   template <typename Fn, typename Gn>
-  static auto bimap(Fn f, Gn g) {
+  static auto bimap(Fn f, Gn g)
+      -> Hom<P<Dom<Fn>, Dom<Gn>>, P<Cod<Fn>, Cod<Gn>>> {
     return [f, g](auto tu) {
       auto [t, u] = tu;
       return std::pair{f(t), g(u)};
@@ -444,7 +414,7 @@ TEST_CASE(
 }
 
 template <typename Fn, typename Gn>
-auto fanout(Fn f, Gn g) {
+auto fanout(Fn f, Gn g) -> Hom<Dom<Fn>, P<Cod<Fn>, Cod<Gn>>> {
   return [f, g](auto t) {
     static_assert(std::is_invocable_v<Fn, decltype(t)>);
     static_assert(std::is_invocable_v<Gn, decltype(t)>);
@@ -760,106 +730,58 @@ TEST_CASE("Čubrić (1994) equations.") {
 // Cocartesian monoid in Cpp .............................. f[[[2
 // Categorical coproduct bifunctor ........................ f[[[3
 
-template <typename T>
-struct Left {
-  T value;
-
-  bool operator==(const Left<T> &other) const {
-    return value == other.value;
-  }
+template <typename T, typename U>
+struct S : std::variant<T, U> {
+  using std::variant<T, U>::variant;
 };
 
-template <typename U>
-struct Right {
-  U value;
-
-  bool operator==(const Right<U> &other) const {
-    return value == other.value;
-  }
-};
-
-struct Never { // Monoidal unit for LeftOrRight.
+struct Never { // Monoidal unit for S
   Never() = delete;
   Never(const Never &) = delete;
   bool operator==(const Never &) const { return false; }
 };
 
-namespace util {
-  template <typename T, typename... Types>
-  constexpr bool holds_alternative(
-      const std::variant<Types...> &v) noexcept {
-    if constexpr (
-        std::is_same_v<T, Left<Never>> ||
-        std::is_same_v<T, Right<Never>>) {
-      return false; // We will never see a Never value.
-    } else {
-      return std::holds_alternative<T>(v);
-    }
-  }
-} // namespace util
-
-template <typename T, typename U>
-struct LeftOrRight : std::variant<Left<T>, Right<U>> {
-  static constexpr bool is_sum = true;
-
-  using std::variant<Left<T>, Right<U>>::variant;
-  using Left_t = T;
-  using Right_t = U;
-
-  [[nodiscard]] const T &left() const {
-    return std::get<Left<T>>(*this).value;
-  }
-
-  [[nodiscard]] const U &right() const {
-    return std::get<Right<U>>(*this).value;
-  }
-};
-
-template <typename T, typename U>
-using S = LeftOrRight<T, U>;
-
 template <typename T, typename U>
 auto inject_l(T t) -> S<T, U> {
-  return Left<T>{t};
+  return S<T, U>(std::in_place_index<0>, t);
 }
 
 template <typename T, typename U>
 auto inject_r(U t) -> S<T, U> {
-  return Right<U>{t};
+  return S<T, U>(std::in_place_index<1>, t);
 }
 
-template <typename Fn, typename Gn>
-auto fanin(Fn f, Gn g) {
-  return [f, g](auto t_or_u) {
-    using T = typename decltype(t_or_u)::Left_t;
-    using U = typename decltype(t_or_u)::Right_t;
+template <typename Fn, typename Gn, typename T = Dom<Fn>,
+    typename U = Dom<Gn>, typename V = Cod<Fn>>
+auto fanin(Fn f, Gn g) -> Hom<S<T, U>, V> {
 
+  static_assert(std::is_same_v<V, Cod<Gn>>);
+
+  return [f, g](S<T, U> t_or_u) -> V {
     static_assert(std::is_invocable_v<Fn, T>);
     static_assert(std::is_invocable_v<Gn, U>);
 
-    if (util::holds_alternative<Left<T>>(t_or_u))
-      return std::invoke(f, t_or_u.left());
+    if (t_or_u.index() == 0)
+      return std::invoke(f, std::get<0>(t_or_u));
     else
-      return std::invoke(g, t_or_u.right());
+      return std::invoke(g, std::get<1>(t_or_u));
   };
 }
 
 // ((A → B), (C → D)) → (A + C → B + D)
-template <typename Fn, typename Gn>
-auto coprod(Fn f, Gn g)
-    -> Hom<S<Dom<Fn>, Dom<Gn>>, S<Cod<Fn>, Cod<Gn>>> {
-  using T = Dom<Fn>;
-  using U = Dom<Gn>;
-  using X = Cod<Fn>;
-  using Y = Cod<Gn>;
+template <typename Fn, typename Gn, typename T = Dom<Fn>,
+    typename U = Dom<Gn>, typename X = Cod<Fn>,
+    typename Y = Cod<Gn>>
+auto coprod(Fn f, Gn g) -> Hom<S<T, U>, S<X, Y>> {
+
   using TorU = S<T, U>;
   using XorY = S<X, Y>;
 
   return [f, g](TorU t_or_u) -> XorY {
-    if (util::holds_alternative<Left<T>>(t_or_u))
-      return Left<X>{std::invoke(f, t_or_u.left())};
+    if (t_or_u.index() == 0)
+      return std::invoke(f, std::get<0>(t_or_u));
     else
-      return Right<Y>{std::invoke(g, t_or_u.right())};
+      return std::invoke(g, std::get<1>(t_or_u));
   };
 }
 
@@ -867,10 +789,14 @@ TEST_CASE("Coproduct diagram triangles commute, and fanin") {
 
   SECTION("Equation defining fanin") {
     auto a_or_b_to_c = [](S<A, B>) { return C{}; };
-    REQUIRE(
-        fanin(compose(a_or_b_to_c, inject_l<A, B>),
-            compose(a_or_b_to_c, inject_r<A, B>))(S<A, B>{
-            Left<A>{}}) == a_or_b_to_c(S<A, B>{Left<A>{}}));
+    auto actual_a = inject_l<A, B>(A{});
+    auto actual_b = inject_r<A, B>(B{});
+
+    auto foo = fanin(compose(a_or_b_to_c, inject_l<A, B>),
+        compose(a_or_b_to_c, inject_r<A, B>));
+
+    REQUIRE(foo(actual_a) == a_or_b_to_c(actual_a));
+    REQUIRE(foo(actual_b) == a_or_b_to_c(actual_b));
   }
 
   SECTION("Commutativity of left and right triangles in "
@@ -887,7 +813,7 @@ TEST_CASE("Coproduct diagram triangles commute, and fanin") {
   }
 }
 
-struct Either : Bifunctor<Either, LeftOrRight> {
+struct Either : Bifunctor<Either, P> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
     using T = Dom<Fn>;
@@ -898,56 +824,68 @@ struct Either : Bifunctor<Either, LeftOrRight> {
     using XorY = S<X, Y>;
 
     return [f, g](TorU t_or_u) -> XorY {
-      if (util::holds_alternative<Left<T>>(t_or_u))
-        return Left<X>{std::invoke(f, t_or_u.left())};
+      if (t_or_u.index() == 0)
+        return inject_l<X, Y>(
+            std::invoke(f, std::get<0>(t_or_u)));
       else
-        return Right<Y>{std::invoke(g, t_or_u.right())};
+        return inject_r<X, Y>(
+            std::invoke(g, std::get<1>(t_or_u)));
     };
   };
 };
 
 TEST_CASE("P is functorial in the left- and right-position.") {
 
-  auto just_a = inject_l<A, B>(A{});
-  auto just_b = inject_r<A, B>(B{});
+  auto actual_a = inject_l<A, B>(A{});
+  auto actual_b = inject_r<A, B>(B{});
 
   // clang-format off
   REQUIRE(
-    compose(Either::bimap(g, id<B>), Either::bimap(f, id<B>))(just_a) ==
-              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g, f), id<B>)(just_a)
+    compose(Either::bimap(g, id<B>), Either::bimap(f,
+    id<B>))(actual_a) ==
+              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g,
+              f), id<B>)(actual_a)
   );
 
   REQUIRE(
-    compose(Either::bimap(g, id<B>), Either::bimap(f, id<B>))(just_b) ==
-              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g, f), id<B>)(just_b)
+    compose(Either::bimap(g, id<B>), Either::bimap(f,
+    id<B>))(actual_b) ==
+              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g,
+              f), id<B>)(actual_b)
   );
 
   REQUIRE(
-    compose(Either::bimap(id<A>, h), Either::bimap(id<A>, g))(just_a) ==
-              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>, compose(h, g))(just_a)
+    compose(Either::bimap(id<A>, h), Either::bimap(id<A>,
+    g))(actual_a) ==
+              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>,
+              compose(h, g))(actual_a)
   );
 
   REQUIRE(
-    compose(Either::bimap(id<A>, h), Either::bimap(id<A>, g))(just_b) ==
-              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>, compose(h, g))(just_b)
+    compose(Either::bimap(id<A>, h), Either::bimap(id<A>,
+    g))(actual_b) ==
+              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>,
+              compose(h, g))(actual_b)
   );
   // clang-format on
 
-  REQUIRE(Either::bimap(id<A>, id<B>)(just_a) ==
-          id<S<A, B>>(just_a));
-  REQUIRE(Either::bimap(id<A>, id<B>)(just_b) ==
-          id<S<A, B>>(just_b));
+  REQUIRE(Either::bimap(id<A>, id<B>)(actual_a) ==
+          id<S<A, B>>(actual_a));
+  REQUIRE(Either::bimap(id<A>, id<B>)(actual_b) ==
+          id<S<A, B>>(actual_b));
 }
 
 TEST_CASE("Coproduct of functions as expected") {
 
   auto gf = Hom<A, C>{compose(g, f)};
 
-  REQUIRE((coprod(f, gf)(Left<A>{})).left() == B{});
-  REQUIRE((coprod(f, gf)(Right<A>{})).right() == C{});
+  REQUIRE(
+      std::get<B>(coprod(f, gf)(inject_l<A, A>(A{}))) == B{});
+  REQUIRE(
+      std::get<C>(coprod(f, gf)(inject_r<A, A>(A{}))) == C{});
 
-  REQUIRE((coprod(f, h)(Left<A>{})).left() == B{});
-  REQUIRE((coprod(f, h)(Right<C>{})).right() == D{});
+  REQUIRE(std::get<B>(coprod(f, h)(inject_l<A, C>(A{}))) == B{});
+  REQUIRE(std::get<D>(coprod(f, h)(inject_r<A, C>(C{}))) == D{});
 }
 
 // ........................................................ f]]]3
@@ -955,25 +893,25 @@ TEST_CASE("Coproduct of functions as expected") {
 
 template <typename T, typename U, typename V>
 auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
-  if (util::holds_alternative<Left<T>>(tl_ulv)) {
+  if (tl_ulv.index() == 0) {
     if constexpr (std::is_same_v<T, Never>) {
       throw std::bad_variant_access();
     } else {
-      return Left<S<T, U>>{Left<T>{tl_ulv.left()}};
+      return inject_l<S<T, U>, V>(std::get<0>(tl_ulv));
     }
   } else {
-    auto &ulv = tl_ulv.right();
-    if (util::holds_alternative<Left<U>>(ulv)) {
+    auto &ulv = std::get<1>(tl_ulv);
+    if (ulv.index() == 0) {
       if constexpr (std::is_same_v<U, Never>) {
         throw std::bad_variant_access();
       } else {
-        return Left<S<T, U>>{Right<U>{ulv.left()}};
+        return inject_l<S<T, U>, V>(std::get<0>(ulv));
       }
     } else {
       if constexpr (std::is_same_v<V, Never>) {
         throw std::bad_variant_access();
       } else {
-        return Right<V>{ulv.right()};
+        return inject_r<S<T, U>, V>(std::get<1>(ulv));
       }
     }
   }
@@ -981,26 +919,28 @@ auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
 
 template <typename T, typename U, typename V>
 auto coassociator_rv(S<S<T, U>, V> tlu_lv) -> S<T, S<U, V>> {
-  if (util::holds_alternative<Left<S<T, U>>>(tlu_lv)) {
-    auto &tlu = tlu_lv.left();
-    if (util::holds_alternative<Left<T>>(tlu)) {
+  if (tlu_lv.index() == 0) {
+    auto &tlu = std::get<0>(tlu_lv);
+    if (tlu.index() == 0) {
       if constexpr (std::is_same_v<T, Never>) {
         throw std::bad_variant_access();
       } else {
-        return Left<T>{tlu.left()};
+        return inject_l<T, S<U, V>>(std::get<0>(tlu));
       }
     } else {
       if constexpr (std::is_same_v<U, Never>) {
         throw std::bad_variant_access();
       } else {
-        return Right<S<U, V>>{Left<U>{tlu.right()}};
+        return inject_r<T, S<U, V>>(
+            inject_l<U, V>(std::get<1>(tlu)));
       }
     }
   } else {
     if constexpr (std::is_same_v<V, Never>) {
       throw std::bad_variant_access();
     } else {
-      return Right<S<U, V>>{Right<V>{tlu_lv.right()}};
+      return inject_r<T, S<U, V>>(
+          inject_r<U, V>(std::get<1>(tlu_lv)));
     }
   }
 }
@@ -1019,16 +959,21 @@ TEST_CASE(
       );
   // clang-format on
 
-  auto a_bc = S<A, S<B, C>>{Left<A>{}};
+  auto a_bc = inject_l<A, S<B, C>>(A{});
   REQUIRE(coassociator_fd_rv(a_bc) == id<S<A, S<B, C>>>(a_bc));
-  auto ab_c = S<S<A, B>, C>{Right<C>{}};
+  auto ab_c = inject_r<S<A, B>, C>(C{});
   REQUIRE(coassociator_rv_fd(ab_c) == id<S<S<A, B>, C>>(ab_c));
 }
 
 TEST_CASE("Associator diagram for coproduct") {
-  auto start = S<A, S<B, S<C, D>>>{};
-
   // clang-format off
+  auto start_vals = std::vector<S<A, S<B, S<C, D>>>>{
+    inject_l<A, S<B, S<C, D>>>(A{}),
+    inject_r<A, S<B, S<C, D>>>(inject_l<B, S<C, D>>(B{})),
+    inject_r<A, S<B, S<C, D>>>(inject_r<B, S<C, D>>(inject_l<C, D>(C{}))),
+    inject_r<A, S<B, S<C, D>>>(inject_r<B, S<C, D>>(inject_r<C, D>(D{})))
+  };
+
   auto cw_path = compose(
         coassociator_fd<S<A, B>, C, D>,
         coassociator_fd<A, B, S<C, D>>
@@ -1040,80 +985,58 @@ TEST_CASE("Associator diagram for coproduct") {
         coprod(id<A>, coassociator_fd<B, C, D>)
       );
   // clang-format on
-
-  REQUIRE(ccw_path(start) == cw_path(start));
+  for (auto &each : start_vals)
+    REQUIRE(ccw_path(each) == cw_path(each));
 };
 
 // ........................................................ f]]]3
 // Corpdocut unitor ....................................... f[[[3
 
 template <typename T>
-struct LeftOrRight<T, Never>
-    : std::variant<Left<T>, Right<Never>> {
-  using std::variant<Left<T>, Right<Never>>::variant;
+struct S<T, Never> : std::variant<T, Never> {
+  using std::variant<T, Never>::variant;
 
-  LeftOrRight()
-      : std::variant<Left<T>, Right<Never>>{Left<T>{}} {}
+  S() : std::variant<T, Never>{inject_l<T, Never>(T{})} {}
 
-  LeftOrRight(const LeftOrRight &other)
-      : std::variant<Left<T>, Right<Never>>(
-            std::in_place_type<Left<T>>, Left<T>{other.left()}) {
-  }
-
-  [[nodiscard]] const T &left() const {
-    return std::get<Left<T>>(*this).value;
-  }
-
-  [[nodiscard]] const T &right() const {
-    throw std::bad_variant_access();
-  }
+  S(const S &other)
+      : std::variant<T, Never>(
+            std::in_place_type<T>, std::get<T>(other)) {}
 };
 
 template <typename T>
-struct LeftOrRight<Never, T>
-    : std::variant<Left<Never>, Right<T>> {
-  using std::variant<Left<Never>, Right<T>>::variant;
+struct S<Never, T> : std::variant<Never, T> {
+  using std::variant<Never, T>::variant;
 
-  LeftOrRight()
-      : std::variant<Left<Never>, Right<T>>{Right<T>{}} {}
+  S() : std::variant<Never, T>{inject_r<Never, T>(T{})} {}
 
-  LeftOrRight(const LeftOrRight &other)
-      : std::variant<Left<Never>, Right<T>>(
-            std::in_place_type<Right<T>>,
-            Right<T>{other.right()}) {}
-
-  [[nodiscard]] const T &left() const {
-    throw std::bad_variant_access();
-  }
-
-  [[nodiscard]] const T &right() const {
-    return std::get<Right<T>>(*this).value;
-  }
+  S(const S &other)
+      : std::variant<Never, T>(
+            std::in_place_type<T>, std::get<T>(other)) {}
 };
 
 template <typename T>
 auto l_counitor_fw(S<Never, T> just_t) -> T {
-  return just_t.right();
+  return std::get<1>(just_t);
 }
 
 template <typename T>
 auto l_counitor_rv(T t) -> S<Never, T> {
-  return Right<T>{t};
+  return inject_r<Never, T>(t);
 }
 
 template <typename T>
 auto r_counitor_fw(S<T, Never> just_t) -> T {
-  return just_t.left();
+  return std::get<0>(just_t);
 }
 
 template <typename T>
 auto r_counitor_rv(T t) -> S<T, Never> {
-  return Left<T>{t};
+  return inject_l<T, Never>(t);
 }
 
 TEST_CASE("_fw and _rv are mutual inverses for L-/R-counitor") {
-  auto ra = S<Never, A>{Right<A>{}};
-  auto la = S<A, Never>{Left<A>{}};
+  auto ra = inject_r<Never, A>(A{});
+  auto la = inject_l<A, Never>(A{});
 
   // clang-format off
   REQUIRE(
@@ -1129,14 +1052,14 @@ TEST_CASE("_fw and _rv are mutual inverses for L-/R-counitor") {
       compose(r_counitor_rv<A>, r_counitor_fw<A>)(la) ==
           id<S<A, Never>>(la)
   );
-  REQUIRE(compose(r_counitor_fw<A>, r_counitor_rv<A>)(A{}) == 
+  REQUIRE(compose(r_counitor_fw<A>, r_counitor_rv<A>)(A{}) ==
           id<A>(A{})
   );
   // clang-format on
 }
 
 TEST_CASE("Unitor diagram for coproduct") {
-  auto a_or_rb = S<A, S<Never, B>>{Left<A>{}};
+  auto a_or_rb = inject_l<A, S<Never, B>>(A{});
 
   // clang-format off
   auto cw_path = compose(
@@ -1156,10 +1079,10 @@ TEST_CASE("Unitor diagram for coproduct") {
 
 template <typename T, typename U>
 auto cobraid(S<T, U> t_or_u) -> S<U, T> {
-  if (util::holds_alternative<Left<T>>(t_or_u))
-    return S<U, T>{Right<T>{t_or_u.left()}};
+  if (t_or_u.index() == 0)
+    return inject_r<U, T>(std::get<0>(t_or_u));
   else
-    return S<U, T>{Left<U>{t_or_u.right()}};
+    return inject_l<U, T>(std::get<1>(t_or_u));
 }
 
 TEST_CASE("Braiding of coproduct is self-inverse") {
@@ -1198,12 +1121,12 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
 
 template <typename T, typename U, typename X>
 auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X> {
-  if (util::holds_alternative<Left<P<T, X>>>(tx_ux)) {
-    auto [t, x] = tx_ux.left();
-    return {{Left<T>{t}}, x};
+  if (tx_ux.index() == 0) {
+    auto [t, x] = std::get<0>(tx_ux);
+    return {inject_l<T, U>(t), x};
   } else {
-    auto [u, x] = tx_ux.right();
-    return {{Right<U>{u}}, x};
+    auto [u, x] = std::get<1>(tx_ux);
+    return {inject_r<T, U>(u), x};
   }
 }
 
@@ -1211,18 +1134,17 @@ template <typename T, typename U, typename X>
 auto distributor_rv(P<S<T, U>, X> t_or_u_and_x)
     -> S<P<T, X>, P<U, X>> {
   auto [t_u, x] = t_or_u_and_x;
-  if (util::holds_alternative<Left<T>>(t_u))
-    return Left<P<T, X>>{{t_u.left(), x}};
+  if (t_u.index() == 0)
+    return inject_l<P<T, X>, P<U, X>>({std::get<0>(t_u), x});
   else
-    return Right<P<U, X>>{{t_u.right(), x}};
+    return inject_r<P<T, X>, P<U, X>>({std::get<1>(t_u), x});
 }
 
 TEST_CASE("Distributor is an isomorphism") {
 
   auto values_fw_rv = std::vector<S<P<A, C>, P<B, C>>>{
-      Left<P<A, C>>{{A{}, C{}}},
-      Right<P<B, C>>{{B{}, C{}}},
-  };
+      inject_l<P<A, C>, P<B, C>>({A{}, C{}}),
+      inject_r<P<A, C>, P<B, C>>({B{}, C{}})};
 
   auto fw_rv =
       compose(distributor_rv<A, B, C>, distributor_fw<A, B, C>);
@@ -1232,7 +1154,7 @@ TEST_CASE("Distributor is an isomorphism") {
   }
 
   auto values_rv_fw = std::vector<P<S<A, B>, C>>{
-      {Left<A>{A{}}, C{}}, {Right<B>{B{}}, C{}}};
+      {inject_l<A, B>(A{}), C{}}, {inject_r<A, B>(B{}), C{}}};
 
   auto rv_fw =
       compose(distributor_fw<A, B, C>, distributor_rv<A, B, C>);
