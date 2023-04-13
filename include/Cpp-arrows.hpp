@@ -115,18 +115,6 @@ namespace tf {
     };
   }
 
-  // template <typename F, typename... Fs>
-  // constexpr decltype(auto) compose(F f, Fs... fs) {
-  //   if constexpr (sizeof...(fs) < 1)
-  //     return [f](Dom<F> &&x) -> Cod<F> {
-  //       return std::invoke(f, std::forward<decltype(x)>(x));
-  //     };
-  //   else
-  //     return [f, fs...](Dom<F> &&x) -> Cod<F> {
-  //       return std::invoke(
-  //           f, compose(fs...)(std::forward<decltype(x)>(x)));
-  //     };
-  // }
   // ...................................................... f]]]1
   // Currying ............................................. f[[[1
 
