@@ -682,6 +682,80 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
   REQUIRE(CHom<A>::fmap(id<C>)(gof)(A{}) == gof(A{}));
 }
 // ........................................................ f]]]3
+// Cartesian closure laws ................................. f[[[3
+
+template <typename T, typename U>
+auto ev(P<Hom<T, U>, T> fn_and_arg) {
+  auto [f, x] = fn_and_arg;
+  return std::invoke(f, x);
+}
+
+template <typename Fn, typename TU = Dom<Fn>,
+    typename T = std::tuple_element_t<0, TU>,
+    typename U = std::tuple_element_t<1, TU>,
+    typename V = Cod<Fn>>
+auto pcurry(Fn f) -> Hom<T, Hom<U, V>> {
+  return [f](T t) -> Hom<U, V> {
+    return [f, t](U u) -> V {
+      return std::invoke(f, std::pair{t, u});
+    };
+  };
+}
+
+// LaTeX version:
+// TEST_CASE("Commutativity of $\eqref{cd:cpp-exponential}$") {
+TEST_CASE("Commutativity of $\\eqref{cd:cpp-exponential}$") {
+  auto ab = P<A, B>{};
+  auto k = [](P<A, B>) -> C { return {}; };
+
+  auto cw = compose(ev<B, C>, prod(pcurry(k), id<B>));
+
+  REQUIRE(cw(ab) == k(ab));
+}
+
+template <typename Fn>
+auto puncurry(Fn f) {
+  using T = Dom<Fn>;
+  using UtoV = Cod<Fn>;
+  using U = Dom<UtoV>;
+  using V = Cod<UtoV>;
+
+  return [f](std::pair<T, U> p) -> V {
+    return std::invoke(std::invoke(f, p.first), p.second);
+  };
+}
+
+TEST_CASE("pcurry and puncurry are inverse") {
+  auto ab = P<A, B>{};
+  auto k = [](P<A, B>) -> C { return {}; };
+
+  REQUIRE(puncurry(pcurry(k))(ab) == C{});
+}
+
+TEST_CASE("Čubrić (1994) equations.") {
+  auto cb_to_a = [](P<C, B>) { return A{}; };
+  auto c_to_b_to_a = pcurry(cb_to_a);
+
+  auto lhs1 = compose(ev<B, A>,
+      fanout(
+          compose(pcurry(cb_to_a), proj_l<C, B>), proj_r<C, B>));
+
+  REQUIRE(lhs1(P<C, B>{}) == cb_to_a(P<C, B>{}));
+
+  // clang-format off
+  auto lhs2 = pcurry(Hom<P<C,B>, A>{
+        compose(ev<B, A>,
+          fanout(
+            compose(c_to_b_to_a, proj_l<C, B>),
+            proj_r<C, B>
+          )
+        )
+        });
+  // clang-format on
+
+  REQUIRE(lhs2(C{})(B{}) == c_to_b_to_a(C{})(B{}));
+}
+// ........................................................ f]]]3
 // ........................................................ f]]]2
 // Cocartesian monoid in Cpp .............................. f[[[2
 // Categorical coproduct bifunctor ........................ f[[[3
@@ -1168,80 +1242,6 @@ TEST_CASE("Distributor is an isomorphism") {
   }
 }
 
-// ........................................................ f]]]3
-// Cartesian closure laws ................................. f[[[3
-
-template <typename T, typename U>
-auto ev(P<Hom<T, U>, T> fn_and_arg) {
-  auto [f, x] = fn_and_arg;
-  return std::invoke(f, x);
-}
-
-template <typename Fn, typename TU = Dom<Fn>,
-    typename T = std::tuple_element_t<0, TU>,
-    typename U = std::tuple_element_t<1, TU>,
-    typename V = Cod<Fn>>
-auto pcurry(Fn f) -> Hom<T, Hom<U, V>> {
-  return [f](T t) -> Hom<U, V> {
-    return [f, t](U u) -> V {
-      return std::invoke(f, std::pair{t, u});
-    };
-  };
-}
-
-// LaTeX version:
-// TEST_CASE("Commutativity of $\eqref{cd:cpp-exponential}$") {
-TEST_CASE("Commutativity of $\\eqref{cd:cpp-exponential}$") {
-  auto ab = P<A, B>{};
-  auto k = [](P<A, B>) -> C { return {}; };
-
-  auto cw = compose(ev<B, C>, prod(pcurry(k), id<B>));
-
-  REQUIRE(cw(ab) == k(ab));
-}
-
-template <typename Fn>
-auto puncurry(Fn f) {
-  using T = Dom<Fn>;
-  using UtoV = Cod<Fn>;
-  using U = Dom<UtoV>;
-  using V = Cod<UtoV>;
-
-  return [f](std::pair<T, U> p) -> V {
-    return std::invoke(std::invoke(f, p.first), p.second);
-  };
-}
-
-TEST_CASE("pcurry and puncurry are inverse") {
-  auto ab = P<A, B>{};
-  auto k = [](P<A, B>) -> C { return {}; };
-
-  REQUIRE(puncurry(pcurry(k))(ab) == C{});
-}
-
-TEST_CASE("Čubrić (1994) equations.") {
-  auto cb_to_a = [](P<C, B>) { return A{}; };
-  auto c_to_b_to_a = pcurry(cb_to_a);
-
-  auto lhs1 = compose(ev<B, A>,
-      fanout(
-          compose(pcurry(cb_to_a), proj_l<C, B>), proj_r<C, B>));
-
-  REQUIRE(lhs1(P<C, B>{}) == cb_to_a(P<C, B>{}));
-
-  // clang-format off
-  auto lhs2 = pcurry(Hom<P<C,B>, A>{
-        compose(ev<B, A>,
-          fanout(
-            compose(c_to_b_to_a, proj_l<C, B>),
-            proj_r<C, B>
-          )
-        )
-        });
-  // clang-format on
-
-  REQUIRE(lhs2(C{})(B{}) == c_to_b_to_a(C{})(B{}));
-}
 // ........................................................ f]]]3
 // ........................................................ f]]]2
 // Isomorphism between C++ function arguments and tuples .. f[[[2
