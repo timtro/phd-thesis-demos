@@ -90,33 +90,110 @@ namespace tf {
   }
   // ...................................................... f]]]1
   // Arrow composition .................................... f[[[1
-  template <typename F, typename... Fs>
-  constexpr decltype(auto) compose(F f, Fs... fs) {
-    if constexpr (sizeof...(fs) < 1)
-      return [f](auto &&x) -> decltype(auto) {
-        return std::invoke(f, std::forward<decltype(x)>(x));
-      };
-    else
-      return [f, fs...](auto &&x) -> decltype(auto) {
-        return std::invoke(
-            f, compose(fs...)(std::forward<decltype(x)>(x)));
-      };
+
+  template <typename Fn>
+  constexpr auto compose(Fn fn) {
+    return [fn](Dom<Fn> x) -> Cod<Fn> { return fn(x); };
   }
+
+  template <typename Fn, typename Gn>
+  constexpr auto compose(Fn fn, Gn gn) {
+    return [fn, gn](Dom<Gn> x) -> Cod<Fn> { return fn(gn(x)); };
+  }
+
+  template <typename Fn, typename Gn, typename Hn>
+  constexpr auto compose(Fn fn, Gn gn, Hn hn) {
+    return [fn, gn, hn](Dom<Hn> x) -> Cod<Fn> {
+      return fn(gn(hn(x)));
+    };
+  }
+
+  template <typename Fn, typename Gn, typename Hn, typename In>
+  constexpr auto compose(Fn fn, Gn gn, Hn hn, In in) {
+    return [fn, gn, hn, in](Dom<In> x) -> Cod<Fn> {
+      return fn(gn(hn(in(x))));
+    };
+  }
+
+  // template <typename F, typename... Fs>
+  // constexpr decltype(auto) compose(F f, Fs... fs) {
+  //   if constexpr (sizeof...(fs) < 1)
+  //     return [f](Dom<F> &&x) -> Cod<F> {
+  //       return std::invoke(f, std::forward<decltype(x)>(x));
+  //     };
+  //   else
+  //     return [f, fs...](Dom<F> &&x) -> Cod<F> {
+  //       return std::invoke(
+  //           f, compose(fs...)(std::forward<decltype(x)>(x)));
+  //     };
+  // }
   // ...................................................... f]]]1
   // Currying ............................................. f[[[1
+
   template <typename F>
-  constexpr decltype(auto) curry(F f) {
-    if constexpr (std::is_invocable_v<F>)
+  constexpr auto curry(F f) {
+    if constexpr (std::is_invocable_v<F>) {
       return std::invoke(f);
-    else
-      return [f](auto &&x) {
-        return curry(
-            // perfectly capture x here:
-            [f, x](auto &&...xs)
-                -> decltype(std::invoke(f, x, xs...)) {
-              return std::invoke(f, x, xs...);
-            });
+    } else if constexpr (
+        std::tuple_size_v<
+            typename impl::function_traits<F>::arg_types> == 1) {
+      return [f](Dom<F> x) -> Cod<F> { return f(x); };
+    } else if constexpr (
+        std::tuple_size_v<
+            typename impl::function_traits<F>::arg_types> == 2) {
+
+      using Dm0 = std::tuple_element_t<0,
+          typename impl::function_traits<F>::arg_types>;
+      using Dm1 = std::tuple_element_t<1,
+          typename impl::function_traits<F>::arg_types>;
+
+      return [fn = f](Dm0 d0) -> Hom<Dm1, Cod<F>> {
+        return [&fn, d0](Dm1 d1) {
+          return std::invoke(fn, d0, d1);
+        };
       };
+    } else if constexpr (
+        std::tuple_size_v<
+            typename impl::function_traits<F>::arg_types> == 3) {
+
+      using Dm0 = std::tuple_element_t<0,
+          typename impl::function_traits<F>::arg_types>;
+      using Dm1 = std::tuple_element_t<1,
+          typename impl::function_traits<F>::arg_types>;
+      using Dm2 = std::tuple_element_t<2,
+          typename impl::function_traits<F>::arg_types>;
+
+      return [fn = f](Dm0 d0) -> Hom<Dm1, Hom<Dm2, Cod<F>>> {
+        return [&fn, d0](Dm1 d1) -> Hom<Dm2, Cod<F>> {
+          return [&fn, &d0, d1](Dm2 d2) -> Cod<F> {
+            return std::invoke(fn, d0, d1, d2);
+          };
+        };
+      };
+    } else if constexpr (
+        std::tuple_size_v<
+            typename impl::function_traits<F>::arg_types> == 4) {
+
+      using Dm0 = std::tuple_element_t<0,
+          typename impl::function_traits<F>::arg_types>;
+      using Dm1 = std::tuple_element_t<1,
+          typename impl::function_traits<F>::arg_types>;
+      using Dm2 = std::tuple_element_t<2,
+          typename impl::function_traits<F>::arg_types>;
+      using Dm3 = std::tuple_element_t<3,
+          typename impl::function_traits<F>::arg_types>;
+
+      return [fn = f](Dm0 d0)
+                 -> Hom<Dm1, Hom<Dm2, Hom<Dm3, Cod<F>>>> {
+        return [&fn, d0](Dm1 d1) -> Hom<Dm2, Hom<Dm3, Cod<F>>> {
+          return [&fn, &d0, d1](Dm2 d2) -> Hom<Dm3, Cod<F>> {
+            return [&fn, &d0, &d1, d2](Dm3 d3) -> Cod<F> {
+              return std::invoke(fn, d0, d1, d2, d3);
+            };
+          };
+        };
+      };
+    }
   }
   // ...................................................... f]]]1
 } // namespace tf
