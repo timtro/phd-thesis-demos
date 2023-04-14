@@ -734,7 +734,7 @@ template <typename T, typename U>
 struct S : std::variant<T, U> {
   using std::variant<T, U>::variant;
 
-  explicit S() = delete;
+  S() = delete;
 };
 
 struct Never { // Monoidal unit for S
