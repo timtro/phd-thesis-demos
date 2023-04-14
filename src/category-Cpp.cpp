@@ -787,32 +787,39 @@ auto coprod(Fn f, Gn g) -> Hom<S<T, U>, S<X, Y>> {
   };
 }
 
-TEST_CASE("Coproduct diagram triangles commute, and fanin") {
+TEST_CASE("Equation defining fanin") {
+  auto a_or_b_to_c = [](S<A, B>) { return C{}; };
+  auto actual_a = inject_l<A, B>(A{});
+  auto actual_b = inject_r<A, B>(B{});
 
-  SECTION("Equation defining fanin") {
-    auto a_or_b_to_c = [](S<A, B>) { return C{}; };
-    auto actual_a = inject_l<A, B>(A{});
-    auto actual_b = inject_r<A, B>(B{});
+  // clang-format off
+  auto foo = fanin(
+              compose(a_or_b_to_c, inject_l<A, B>),
+              compose(a_or_b_to_c, inject_r<A, B>)
+            );
+  // clang-format on
 
-    auto foo = fanin(compose(a_or_b_to_c, inject_l<A, B>),
-        compose(a_or_b_to_c, inject_r<A, B>));
+  REQUIRE(foo(actual_a) == a_or_b_to_c(actual_a));
+  REQUIRE(foo(actual_b) == a_or_b_to_c(actual_b));
+}
 
-    REQUIRE(foo(actual_a) == a_or_b_to_c(actual_a));
-    REQUIRE(foo(actual_b) == a_or_b_to_c(actual_b));
-  }
+// LaTeX version
+// TEST_CASE(
+//     "Commutativity of left and right triangles in
+//     $\eqref{cd:cpp:binary-coproduct}$") {
+TEST_CASE(
+    "Commutativity of left and right triangles in "
+    "coproduct diagram") {
+  auto a_to_c = [](A) { return C{}; };
+  auto b_to_c = [](B) { return C{}; };
 
-  SECTION("Commutativity of left and right triangles in "
-          "coproduct diagram") {
-    auto a_to_c = [](A) { return C{}; };
-    auto b_to_c = [](B) { return C{}; };
+  auto left_triangle_path =
+      compose(fanin(a_to_c, b_to_c), inject_l<A, B>);
+  REQUIRE(left_triangle_path(A{}) == a_to_c(A{}));
 
-    REQUIRE(
-        compose(fanin(a_to_c, b_to_c), inject_l<A, B>)(A{}) ==
-        a_to_c(A{}));
-    REQUIRE(
-        compose(fanin(a_to_c, b_to_c), inject_r<A, B>)(B{}) ==
-        b_to_c(B{}));
-  }
+  auto right_triangle_path =
+      compose(fanin(a_to_c, b_to_c), inject_r<A, B>);
+  REQUIRE(right_triangle_path(B{}) == b_to_c(B{}));
 }
 
 struct Either : Bifunctor<Either, P> {
