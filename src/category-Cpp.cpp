@@ -793,14 +793,14 @@ TEST_CASE("Equation defining fanin") {
   auto actual_b = inject_r<A, B>(B{});
 
   // clang-format off
-  auto foo = fanin(
+  auto fanned = fanin(
               compose(a_or_b_to_c, inject_l<A, B>),
               compose(a_or_b_to_c, inject_r<A, B>)
             );
   // clang-format on
 
-  REQUIRE(foo(actual_a) == a_or_b_to_c(actual_a));
-  REQUIRE(foo(actual_b) == a_or_b_to_c(actual_b));
+  REQUIRE(fanned(actual_a) == a_or_b_to_c(actual_a));
+  REQUIRE(fanned(actual_b) == a_or_b_to_c(actual_b));
 }
 
 // LaTeX version
