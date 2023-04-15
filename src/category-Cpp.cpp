@@ -349,46 +349,56 @@ auto proj_r(P<T, U> tu) -> U {
   return std::get<1>(tu);
 }
 
+// clang-format off
+template <typename Fn,          typename Gn,
+          typename T = Dom<Fn>, typename U = Dom<Gn>,
+          typename X = Cod<Fn>, typename Y = Cod<Gn>>
+// clang-format on
+auto prod(Fn f, Gn g) -> Hom<P<T, U>, P<X, Y>> {
+  return [f, g](P<T, U> tu) -> P<X, Y> {
+    auto [t, u] = tu;
+    return {f(t), g(u)};
+  };
+}
+
+TEST_CASE("P (via prod) is functorial in both factors.") {
+
+  auto ab = P<A, B>{};
+
+  REQUIRE(compose(prod(g, id<B>), prod(f, id<B>))(ab) ==
+          prod(compose(g, f), id<B>)(ab));
+
+  REQUIRE(compose(prod(id<A>, h), prod(id<A>, g))(ab) ==
+          prod(id<A>, compose(h, g))(ab));
+
+  REQUIRE(prod(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
+}
+
 struct Pair : Bifunctor<Pair, P> {
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g)
       -> Hom<P<Dom<Fn>, Dom<Gn>>, P<Cod<Fn>, Cod<Gn>>> {
-    return [f, g](auto tu) {
-      auto [t, u] = tu;
-      return std::pair{f(t), g(u)};
-    };
+    return prod(std::forward<Fn>(f), std::forward<Gn>(g));
   }
 };
 
-TEST_CASE("std::pair is functorial in the left position.") {
+TEST_CASE("Pair is functorial in the left position.") {
 
   auto ab = Pair::Of<A, B>{};
 
   // clang-format off
   REQUIRE(
     compose(Pair::bimap(g, id<B>), Pair::bimap(f, id<B>))(ab) ==
-              Pair::bimap<Hom<A, C>, Hom<B,B>>(compose(g, f), id<B>)(ab)
+              Pair::bimap(compose(g, f), id<B>)(ab)
   );
 
   REQUIRE(
     compose(Pair::bimap(id<A>, h), Pair::bimap(id<A>, g))(ab) ==
-              Pair::bimap<Hom<A,A>, Hom<B, D>>(id<A>, compose(h, g))(ab)
+              Pair::bimap(id<A>, compose(h, g))(ab)
   );
   // clang-format on
 
   REQUIRE(Pair::bimap(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
-}
-
-template <typename Fn, typename Gn>
-auto prod(Fn f, Gn g)
-    -> Hom<P<Dom<Fn>, Dom<Gn>>, P<Cod<Fn>, Cod<Gn>>> {
-  using TandU = P<Dom<Fn>, Dom<Gn>>;
-  using XandY = P<Cod<Fn>, Cod<Gn>>;
-
-  return [f, g](TandU tu) -> XandY {
-    auto [t, u] = tu;
-    return {f(t), g(u)};
-  };
 }
 
 // This is cute, but doesn't really make the code more readable:
@@ -405,16 +415,13 @@ auto prod(Fn f, Gn g)
 //   };
 // }
 
-TEST_CASE(
-    "Product of functions behaves as expected with "
-    "respect to  l/rmap.") {
-  auto ac = P<A, C>{};
-  REQUIRE(prod(f, id<C>)(ac) == Pair::bimap(f, id<C>)(ac));
-  REQUIRE(prod(id<A>, h)(ac) == Pair::bimap(id<A>, h)(ac));
-}
-
-template <typename Fn, typename Gn>
-auto fanout(Fn f, Gn g) -> Hom<Dom<Fn>, P<Cod<Fn>, Cod<Gn>>> {
+// clang-format off
+template <typename Fn,          typename Gn,
+          typename T = Dom<Fn>, typename U = Dom<Gn>,
+          typename X = Cod<Fn>, typename Y = Cod<Gn>>
+// clang-format on
+auto fanout(Fn f, Gn g) -> Hom<T, P<X, Y>> {
+  static_assert(std::is_same_v<T, U>);
   return [f, g](auto t) {
     static_assert(std::is_invocable_v<Fn, decltype(t)>);
     static_assert(std::is_invocable_v<Gn, decltype(t)>);
@@ -424,22 +431,26 @@ auto fanout(Fn f, Gn g) -> Hom<Dom<Fn>, P<Cod<Fn>, Cod<Gn>>> {
 }
 
 TEST_CASE("Coherence of $\\eqref{cd:cpp:binary-product}$") {
-  auto A_to_B = [](A) { return B{}; };
-  auto A_to_C = [](A) { return C{}; };
+  auto a_to_b = [](A) { return B{}; };
+  auto a_to_c = [](A) { return C{}; };
 
-  auto A_to_BxC = fanout(A_to_B, A_to_C);
+  auto a_to_bc = fanout(a_to_b, a_to_c);
 
   SECTION("Equation defining fanout.") {
+    // clang-format off
     REQUIRE(
-        fanout(compose(proj_l<B, C>, A_to_BxC),
-            compose(proj_r<B, C>, A_to_BxC))(A{}) ==
-        A_to_BxC(A{}));
+        fanout(
+            compose(proj_l<B, C>, a_to_bc),
+            compose(proj_r<B, C>, a_to_bc)) (A{}) 
+              == a_to_bc(A{})
+    );
+    // clang-format on
   }
 
   SECTION("Commutativity of left and right triangles in "
           "$\\eqref{cd:cpp:binary-product}$") {
-    REQUIRE(proj_l(A_to_BxC(A{})) == A_to_B(A{}));
-    REQUIRE(proj_r(A_to_BxC(A{})) == A_to_C(A{}));
+    REQUIRE(proj_l(a_to_bc(A{})) == a_to_b(A{}));
+    REQUIRE(proj_r(a_to_bc(A{})) == a_to_c(A{}));
   }
 }
 
@@ -843,58 +854,47 @@ struct Either : Bifunctor<Either, P> {
   };
 };
 
-TEST_CASE("P is functorial in the left- and right-position.") {
-
-  auto actual_a = inject_l<A, B>(A{});
-  auto actual_b = inject_r<A, B>(B{});
-
+TEST_CASE("S is functorial in the left- and right-position.") {
   // clang-format off
-  REQUIRE(
-    compose(Either::bimap(g, id<B>), Either::bimap(f,
-    id<B>))(actual_a) ==
-              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g,
-              f), id<B>)(actual_a)
-  );
-
-  REQUIRE(
-    compose(Either::bimap(g, id<B>), Either::bimap(f,
-    id<B>))(actual_b) ==
-              Either::bimap<Hom<A, C>, Hom<B,B>>(compose(g,
-              f), id<B>)(actual_b)
-  );
-
-  REQUIRE(
-    compose(Either::bimap(id<A>, h), Either::bimap(id<A>,
-    g))(actual_a) ==
-              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>,
-              compose(h, g))(actual_a)
-  );
-
-  REQUIRE(
-    compose(Either::bimap(id<A>, h), Either::bimap(id<A>,
-    g))(actual_b) ==
-              Either::bimap<Hom<A,A>, Hom<B, D>>(id<A>,
-              compose(h, g))(actual_b)
-  );
+  auto actual_ab = std::vector<S<A, B>>{
+      inject_l<A, B>(A{}),
+      inject_r<A, B>(B{})
+    };
   // clang-format on
 
-  REQUIRE(Either::bimap(id<A>, id<B>)(actual_a) ==
-          id<S<A, B>>(actual_a));
-  REQUIRE(Either::bimap(id<A>, id<B>)(actual_b) ==
-          id<S<A, B>>(actual_b));
+  for (auto &x : actual_ab) {
+
+    auto bimap_l_gf = compose(
+        Either::bimap(g, id<B>), Either::bimap(f, id<B>));
+
+    REQUIRE(
+        bimap_l_gf(x) == Either::bimap(compose(g, f), id<B>)(x));
+
+    auto bimap_r_hg = compose(
+        Either::bimap(id<A>, h), Either::bimap(id<A>, g));
+
+    REQUIRE(
+        bimap_r_hg(x) == Either::bimap(id<A>, compose(h, g))(x));
+
+    REQUIRE(Either::bimap(id<A>, id<B>)(x) == id<S<A, B>>(x));
+  }
 }
 
 TEST_CASE("Coproduct of functions as expected") {
 
-  auto gf = Hom<A, C>{compose(g, f)};
+  // coprod(f, h) : S<A, C> $→$ S<B, D>
+  REQUIRE(std::get<0>(coprod(f, h)(inject_l<A, C>(A{}))) == B{});
+  REQUIRE(std::get<1>(coprod(f, h)(inject_r<A, C>(C{}))) == D{});
 
-  REQUIRE(
-      std::get<B>(coprod(f, gf)(inject_l<A, A>(A{}))) == B{});
-  REQUIRE(
-      std::get<C>(coprod(f, gf)(inject_r<A, A>(A{}))) == C{});
+  SECTION("Also works on the diagonal") {
+    // gf : A $→$ C
+    auto gf = compose(g, f);
+    // f_plus_gf : S<A, A> $→$ S<B, C>
+    auto f_plus_gf = coprod(f, gf);
 
-  REQUIRE(std::get<B>(coprod(f, h)(inject_l<A, C>(A{}))) == B{});
-  REQUIRE(std::get<D>(coprod(f, h)(inject_r<A, C>(C{}))) == D{});
+    REQUIRE(std::get<0>(f_plus_gf(inject_l<A, A>(A{}))) == B{});
+    REQUIRE(std::get<1>(f_plus_gf(inject_r<A, A>(A{}))) == C{});
+  }
 }
 
 // ........................................................ f]]]3
