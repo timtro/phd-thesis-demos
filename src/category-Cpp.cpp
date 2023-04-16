@@ -27,30 +27,6 @@ using tst::g; // g : B → C
 using tst::h; // h : C → D
 // using tst::id;
 
-template <typename Derived,
-    template <typename, typename...> typename TypeTemplate>
-struct Functor {
-  template <typename T>
-  using Of = TypeTemplate<T>;
-
-  template <typename Fn>
-  static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
-    return Derived::fmap(f);
-  }
-};
-
-template <typename Derived,
-    template <typename, typename...> typename TypeTemplate>
-struct Bifunctor {
-  template <typename L, typename R>
-  using Of = TypeTemplate<L, R>;
-
-  template <typename Fn, typename Gn>
-  static auto bimap(Fn f, Gn g) {
-    return Derived::bimap(f, g);
-  }
-};
-
 // tfunc test cases ....................................... f[[[1
 TEST_CASE(
     "Polymorphic identity function should perfectly "
@@ -170,7 +146,11 @@ TEST_CASE("f == f ∘ id_A == id_B ∘ f.") {
 template <typename T>
 using IdType = T;
 
-struct Id : Functor<Id, IdType> {
+struct Id {
+
+  template <typename T>
+  using Of = IdType<T>;
+
   template <typename Fn>
   static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return fn;
@@ -192,7 +172,10 @@ TEST_CASE("Check the functor laws for IdF") {
 // ........................................................ f]]]2
 // Optional functor ....................................... f[[[2
 
-struct Optional : Functor<Optional, std::optional> {
+namespace Optional {
+  template <typename T>
+  using Of = std::optional<T>;
+
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
@@ -204,7 +187,7 @@ struct Optional : Functor<Optional, std::optional> {
         return std::nullopt;
     };
   }
-};
+} // namespace Optional
 
 TEST_CASE("Basic behavioural tests of Optional::fmap") {
   auto a = Optional::Of<A>{A{}};
@@ -230,7 +213,7 @@ TEST_CASE("Check the functor laws for Optional::fmap") {
 
   auto opt_f = Optional::fmap(f);
   auto opt_g = Optional::fmap(g);
-  auto opt_gf = Optional::fmap<Hom<A, C>>(compose(g, f));
+  auto opt_gf = Optional::fmap(compose(g, f));
   auto opt_idA = Optional::fmap(id<A>);
 
   REQUIRE(compose(opt_g, opt_f)(a) == opt_gf(a));
@@ -243,7 +226,10 @@ TEST_CASE("Check the functor laws for Optional::fmap") {
 // ........................................................ f]]]2
 // std::vector based List-functor ......................... f[[[2
 
-struct Vector : Functor<Vector, std::vector> {
+namespace Vector {
+  template <typename T>
+  using Of = std::vector<T>;
+
   template <typename Fn>
   static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
@@ -257,7 +243,7 @@ struct Vector : Functor<Vector, std::vector> {
       return u_s;
     };
   };
-};
+}; // namespace Vector
 
 TEST_CASE("Check the functor laws for Vector::fmap") {
   //        Alias for std$∷$vector<A>
@@ -266,9 +252,8 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
 
   // clang-format off
   // $\Ffmap{\ttF}(\ttg) ∘ \Ffmap{\ttF}(\ttf) = \Ffmap{\ttF}(\ttg ∘ \ttf)$
-  REQUIRE(
-    compose(Vector::fmap(g), Vector::fmap(f))(a_s)
-        == Vector::fmap<Hom<A, C>>(compose(g, f))(a_s));
+  REQUIRE(compose(Vector::fmap(g), Vector::fmap(f))(a_s) ==
+          Vector::fmap(compose(g, f))(a_s));
   // clang-format on
 
   // $\Ffmap{\ttF}(\ttid⟨-⟩) = \ttid⟨\FOf{\ttf}{-}⟩$
@@ -285,7 +270,11 @@ struct Always {
 };
 
 template <typename T>
-struct Const : Functor<Const<T>, Always<T>::template given> {
+struct Const {
+
+  template <typename U>
+  using Of = typename Always<T>::template given<U>;
+
   template <typename Fn>
   static auto fmap(Fn) -> Hom<T, T> {
     return id<T>;
@@ -326,7 +315,8 @@ TEST_CASE("Test naturality square for len.") {
   // Satisfies the naturality square:
   // clang-format off
   REQUIRE(
-    compose(len<B>, Vector::fmap(f))(a_s) ==
+    compose(len<B>, Vector::fmap(f))(a_s)
+        ==
           compose(Const<uint>::fmap(f), len<A>)(a_s)
   );
   // clang-format on
@@ -374,7 +364,11 @@ TEST_CASE("P (via prod) is functorial in both factors.") {
   REQUIRE(prod(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
 }
 
-struct Pair : Bifunctor<Pair, P> {
+struct Pair {
+
+  template <typename T, typename U>
+  using Of = std::pair<T, U>;
+
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g)
       -> Hom<P<Dom<Fn>, Dom<Gn>>, P<Cod<Fn>, Cod<Gn>>> {
@@ -639,7 +633,10 @@ struct HomFrom {
 };
 
 template <typename T>
-struct CHom : Functor<CHom<T>, HomFrom<T>::template HomTo> {
+struct CHom {
+  template <typename U>
+  using Of = typename HomFrom<T>::template HomTo<U>;
+
   template <typename Fn>
   static auto fmap(Fn f)
       -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
@@ -833,7 +830,11 @@ TEST_CASE(
   REQUIRE(right_triangle_path(B{}) == b_to_c(B{}));
 }
 
-struct Either : Bifunctor<Either, P> {
+struct Either {
+  
+  template <typename T, typename U>
+  using Of = P<T, U>;
+
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g) {
     using T = Dom<Fn>;
@@ -850,6 +851,20 @@ struct Either : Bifunctor<Either, P> {
       else
         return inject_r<X, Y>(
             std::invoke(g, std::get<1>(t_or_u)));
+    };
+  };
+
+  template <typename Fn, typename U>
+  static auto lmap(Fn fn) {
+    return [fn](Of<Dom<Fn>, U> tu){
+      return bimap(fn, id<U>);
+    };
+  };
+
+  template <typename Gn, typename T>
+  static auto rmap(Gn gn) {
+    return [gn](Of<T, Dom<Gn>> tu){
+      return bimap(id<T>, gn);
     };
   };
 };
@@ -1325,7 +1340,11 @@ TEST_CASE(
 // List<T>-catamorphisms .................................. f[[[3
 
 template <typename T>
-struct ListF : Functor<ListF<T>, OP<T>::template Fst> {
+struct ListF {
+
+  template<typename U>
+  using Of = typename OP<T>::template Fst<U>;
+
   template <typename Fn>
   static auto fmap(Fn fn) {
     return [fn](auto op)
