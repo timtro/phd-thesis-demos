@@ -231,7 +231,7 @@ namespace Vector {
   using Of = std::vector<T>;
 
   template <typename Fn>
-  static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+  auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
     using U = Cod<Fn>;
     return [f](Of<T> t_s) {
@@ -250,13 +250,9 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
   //                 $↓$
   auto a_s = Vector::Of<A>{A{}, A{}, A{}};
 
-  // clang-format off
-  // $\Ffmap{\ttF}(\ttg) ∘ \Ffmap{\ttF}(\ttf) = \Ffmap{\ttF}(\ttg ∘ \ttf)$
   REQUIRE(compose(Vector::fmap(g), Vector::fmap(f))(a_s) ==
           Vector::fmap(compose(g, f))(a_s));
-  // clang-format on
 
-  // $\Ffmap{\ttF}(\ttid⟨-⟩) = \ttid⟨\FOf{\ttf}{-}⟩$
   REQUIRE(Vector::fmap(id<A>)(a_s) == id<Vector::Of<A>>(a_s));
 }
 
@@ -317,7 +313,7 @@ TEST_CASE("Test naturality square for len.") {
   REQUIRE(
     compose(len<B>, Vector::fmap(f))(a_s)
         ==
-          compose(Const<uint>::fmap(f), len<A>)(a_s)
+          compose(Const<std::size_t>::fmap(f), len<A>)(a_s)
   );
   // clang-format on
 }
@@ -831,7 +827,6 @@ TEST_CASE(
 }
 
 struct Either {
-  
   template <typename T, typename U>
   using Of = P<T, U>;
 
@@ -856,16 +851,12 @@ struct Either {
 
   template <typename Fn, typename U>
   static auto lmap(Fn fn) {
-    return [fn](Of<Dom<Fn>, U> tu){
-      return bimap(fn, id<U>);
-    };
+    return [fn](Of<Dom<Fn>, U> tu) { return bimap(fn, id<U>); };
   };
 
   template <typename Gn, typename T>
   static auto rmap(Gn gn) {
-    return [gn](Of<T, Dom<Gn>> tu){
-      return bimap(id<T>, gn);
-    };
+    return [gn](Of<T, Dom<Gn>> tu) { return bimap(id<T>, gn); };
   };
 };
 
@@ -1342,7 +1333,7 @@ TEST_CASE(
 template <typename T>
 struct ListF {
 
-  template<typename U>
+  template <typename U>
   using Of = typename OP<T>::template Fst<U>;
 
   template <typename Fn>
