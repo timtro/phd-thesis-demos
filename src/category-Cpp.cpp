@@ -129,8 +129,7 @@ TEST_CASE(
 
 TEST_CASE("Check associativity: (h.g).f == h.(g.f)") {
   REQUIRE(D{} == compose(h, g, f)(A{}));
-  REQUIRE(
-      compose(h, g, f)(A{}) == compose(h, compose(g, f))(A{}));
+  REQUIRE(compose(h, g, f)(A{}) == compose(h, compose(g, f))(A{}));
   REQUIRE(compose(compose(h, g), f)(A{}) ==
           compose(h, compose(g, f))(A{}));
 }
@@ -177,12 +176,12 @@ namespace Optional {
   using Of = std::optional<T>;
 
   template <typename Fn>
-  static auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+  static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
     using U = Cod<Fn>;
-    return [f](Of<T> ot) -> Of<U> {
+    return [fn](Of<T> ot) -> Of<U> {
       if (ot)
-        return f(ot.value());
+        return fn(ot.value());
       else
         return std::nullopt;
     };
@@ -231,15 +230,15 @@ namespace Vector {
   using Of = std::vector<T>;
 
   template <typename Fn>
-  auto fmap(Fn f) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+  auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     using T = Dom<Fn>;
     using U = Cod<Fn>;
-    return [f](Of<T> t_s) {
+    return [fn](Of<T> t_s) {
       Of<U> u_s;
       u_s.reserve(t_s.size());
 
       std::transform(
-          cbegin(t_s), cend(t_s), std::back_inserter(u_s), f);
+          cbegin(t_s), cend(t_s), std::back_inserter(u_s), fn);
       return u_s;
     };
   };
@@ -280,8 +279,9 @@ struct Const {
 TEST_CASE("Functor axioms of Const<A>.") {
   // clang-format off
   REQUIRE(
-    compose(Const<A>::fmap(g), Const<A>::fmap(f))(A{}) ==
-      Const<A>::fmap(compose(g, f))(A{})
+    compose(Const<A>::fmap(g), Const<A>::fmap(f))(A{})
+      ==
+        Const<A>::fmap(compose(g, f))(A{})
   );
   // clang-format on
 
@@ -340,22 +340,29 @@ template <typename Fn,          typename Gn,
           typename T = Dom<Fn>, typename U = Dom<Gn>,
           typename X = Cod<Fn>, typename Y = Cod<Gn>>
 // clang-format on
-auto prod(Fn f, Gn g) -> Hom<P<T, U>, P<X, Y>> {
-  return [f, g](P<T, U> tu) -> P<X, Y> {
+auto prod(Fn fn, Gn gn) -> Hom<P<T, U>, P<X, Y>> {
+  return [fn, gn](P<T, U> tu) -> P<X, Y> {
     auto [t, u] = tu;
-    return {f(t), g(u)};
+    return {fn(t), gn(u)};
   };
 }
 
 TEST_CASE("P (via prod) is functorial in both factors.") {
-
   auto ab = P<A, B>{};
 
-  REQUIRE(compose(prod(g, id<B>), prod(f, id<B>))(ab) ==
-          prod(compose(g, f), id<B>)(ab));
+  // clang-format off
+  REQUIRE(
+    compose(prod(g, id<B>), prod(f, id<B>))(ab)
+      ==
+        prod(compose(g, f), id<B>)(ab)
+  );
 
-  REQUIRE(compose(prod(id<A>, h), prod(id<A>, g))(ab) ==
-          prod(id<A>, compose(h, g))(ab));
+  REQUIRE(
+    compose(prod(id<A>, h), prod(id<A>, g))(ab)
+      ==
+        prod(id<A>, compose(h, g))(ab)
+  );
+  // clang-format on
 
   REQUIRE(prod(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
 }
@@ -410,13 +417,13 @@ template <typename Fn,          typename Gn,
           typename T = Dom<Fn>, typename U = Dom<Gn>,
           typename X = Cod<Fn>, typename Y = Cod<Gn>>
 // clang-format on
-auto fanout(Fn f, Gn g) -> Hom<T, P<X, Y>> {
+auto fanout(Fn fn, Gn gn) -> Hom<T, P<X, Y>> {
   static_assert(std::is_same_v<T, U>);
-  return [f, g](auto t) {
+  return [fn, gn](auto t) {
     static_assert(std::is_invocable_v<Fn, decltype(t)>);
     static_assert(std::is_invocable_v<Gn, decltype(t)>);
 
-    return std::pair{f(t), g(t)};
+    return std::pair{fn(t), gn(t)};
   };
 }
 
@@ -634,9 +641,8 @@ struct CHom {
   using Of = typename HomFrom<T>::template HomTo<U>;
 
   template <typename Fn>
-  static auto fmap(Fn f)
-      -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
-    return [f](auto g) { return compose(f, g); };
+  static auto fmap(Fn fn) -> Hom<Hom<T, Dom<Fn>>, Hom<T, Cod<Fn>>> {
+    return [fn](auto gn) { return compose(fn, gn); };
   };
 };
 
@@ -664,14 +670,16 @@ auto ev(P<Hom<T, U>, T> fn_and_arg) {
   return std::invoke(f, x);
 }
 
-template <typename Fn, typename TU = Dom<Fn>,
-    typename T = std::tuple_element_t<0, TU>,
-    typename U = std::tuple_element_t<1, TU>,
-    typename V = Cod<Fn>>
-auto pcurry(Fn f) -> Hom<T, Hom<U, V>> {
-  return [f](T t) -> Hom<U, V> {
-    return [f, t](U u) -> V {
-      return std::invoke(f, std::pair{t, u});
+template <typename Fn>
+auto pcurry(Fn fn) {
+  using TU = Dom<Fn>;
+  using T = std::tuple_element_t<0, TU>;
+  using U = std::tuple_element_t<1, TU>;
+  using V = Cod<Fn>;
+
+  return [fn](T t) -> Hom<U, V> {
+    return [fn, t](U u) -> V {
+      return std::invoke(fn, std::pair{t, u});
     };
   };
 }
@@ -688,14 +696,14 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp-exponential}$") {
 }
 
 template <typename Fn>
-auto puncurry(Fn f) {
+auto puncurry(Fn fn) {
   using T = Dom<Fn>;
   using UtoV = Cod<Fn>;
   using U = Dom<UtoV>;
   using V = Cod<UtoV>;
 
-  return [f](std::pair<T, U> p) -> V {
-    return std::invoke(std::invoke(f, p.first), p.second);
+  return [fn](std::pair<T, U> p) -> V {
+    return std::invoke(std::invoke(fn, p.first), p.second);
   };
 }
 
@@ -711,8 +719,7 @@ TEST_CASE("Čubrić (1994) equations.") {
   auto c_to_b_to_a = pcurry(cb_to_a);
 
   auto lhs1 = compose(ev<B, A>,
-      fanout(
-          compose(pcurry(cb_to_a), proj_l<C, B>), proj_r<C, B>));
+      fanout(compose(pcurry(cb_to_a), proj_l<C, B>), proj_r<C, B>));
 
   REQUIRE(lhs1(P<C, B>{}) == cb_to_a(P<C, B>{}));
 
@@ -759,18 +766,18 @@ auto inject_r(U t) -> S<T, U> {
 
 template <typename Fn, typename Gn, typename T = Dom<Fn>,
     typename U = Dom<Gn>, typename V = Cod<Fn>>
-auto fanin(Fn f, Gn g) -> Hom<S<T, U>, V> {
+auto fanin(Fn fn, Gn gn) -> Hom<S<T, U>, V> {
 
   static_assert(std::is_same_v<V, Cod<Gn>>);
 
-  return [f, g](S<T, U> t_or_u) -> V {
+  return [fn, gn](S<T, U> t_or_u) -> V {
     static_assert(std::is_invocable_v<Fn, T>);
     static_assert(std::is_invocable_v<Gn, U>);
 
     if (t_or_u.index() == 0)
-      return std::invoke(f, std::get<0>(t_or_u));
+      return std::invoke(fn, std::get<0>(t_or_u));
     else
-      return std::invoke(g, std::get<1>(t_or_u));
+      return std::invoke(gn, std::get<1>(t_or_u));
   };
 }
 
@@ -778,16 +785,16 @@ auto fanin(Fn f, Gn g) -> Hom<S<T, U>, V> {
 template <typename Fn, typename Gn, typename T = Dom<Fn>,
     typename U = Dom<Gn>, typename X = Cod<Fn>,
     typename Y = Cod<Gn>>
-auto coprod(Fn f, Gn g) -> Hom<S<T, U>, S<X, Y>> {
+auto coprod(Fn fn, Gn gn) -> Hom<S<T, U>, S<X, Y>> {
 
   using TorU = S<T, U>;
   using XorY = S<X, Y>;
 
-  return [f, g](TorU t_or_u) -> XorY {
+  return [fn, gn](TorU t_or_u) -> XorY {
     if (t_or_u.index() == 0)
-      return std::invoke(f, std::get<0>(t_or_u));
+      return std::invoke(fn, std::get<0>(t_or_u));
     else
-      return std::invoke(g, std::get<1>(t_or_u));
+      return std::invoke(gn, std::get<1>(t_or_u));
   };
 }
 
@@ -831,7 +838,7 @@ struct Either {
   using Of = P<T, U>;
 
   template <typename Fn, typename Gn>
-  static auto bimap(Fn f, Gn g) {
+  static auto bimap(Fn fn, Gn gn) {
     using T = Dom<Fn>;
     using U = Dom<Gn>;
     using X = Cod<Fn>;
@@ -839,13 +846,11 @@ struct Either {
     using TorU = S<T, U>;
     using XorY = S<X, Y>;
 
-    return [f, g](TorU t_or_u) -> XorY {
+    return [fn, gn](TorU t_or_u) -> XorY {
       if (t_or_u.index() == 0)
-        return inject_l<X, Y>(
-            std::invoke(f, std::get<0>(t_or_u)));
+        return inject_l<X, Y>(std::invoke(fn, std::get<0>(t_or_u)));
       else
-        return inject_r<X, Y>(
-            std::invoke(g, std::get<1>(t_or_u)));
+        return inject_r<X, Y>(std::invoke(gn, std::get<1>(t_or_u)));
     };
   };
 
@@ -870,14 +875,14 @@ TEST_CASE("S is functorial in the left- and right-position.") {
 
   for (auto &x : actual_ab) {
 
-    auto bimap_l_gf = compose(
-        Either::bimap(g, id<B>), Either::bimap(f, id<B>));
+    auto bimap_l_gf =
+        compose(Either::bimap(g, id<B>), Either::bimap(f, id<B>));
 
     REQUIRE(
         bimap_l_gf(x) == Either::bimap(compose(g, f), id<B>)(x));
 
-    auto bimap_r_hg = compose(
-        Either::bimap(id<A>, h), Either::bimap(id<A>, g));
+    auto bimap_r_hg =
+        compose(Either::bimap(id<A>, h), Either::bimap(id<A>, g));
 
     REQUIRE(
         bimap_r_hg(x) == Either::bimap(id<A>, compose(h, g))(x));
@@ -1106,8 +1111,7 @@ TEST_CASE("Braiding of coproduct is self-inverse") {
 }
 
 TEST_CASE("Braiding diagram 1 for coproduct") {
-  auto start =
-      compose(inject_l<S<A, B>, C>, inject_r<A, B>)(B{});
+  auto start = compose(inject_l<S<A, B>, C>, inject_r<A, B>)(B{});
 
   // clang-format off
   auto cw_path = compose(
@@ -1205,11 +1209,9 @@ auto to_n_ary(Fn &&f) {
 TEST_CASE("f(T₁, T₂, T₃, …, Tₙ) ≅ f(tuple<T₁, T₂, T₃, …, Tₙ>)") {
   auto f = [](A, B, C) -> D { return D{}; };
 
-  REQUIRE(
-      to_unary(f)(std::tuple<A, B, C>{}) == f(A{}, B{}, C{}));
+  REQUIRE(to_unary(f)(std::tuple<A, B, C>{}) == f(A{}, B{}, C{}));
 
-  REQUIRE(
-      to_n_ary(to_unary(f))(A{}, B{}, C{}) == f(A{}, B{}, C{}));
+  REQUIRE(to_n_ary(to_unary(f))(A{}, B{}, C{}) == f(A{}, B{}, C{}));
 }
 
 // ........................................................ f]]]2
@@ -1255,8 +1257,7 @@ using list_element_type = typename std::remove_reference<
 static_assert(std::is_same_v<list_element_type<List<int>>, int>);
 
 template <typename Lst>
-auto to_vector(const Lst l)
-    -> std::vector<list_element_type<Lst>> {
+auto to_vector(const Lst l) -> std::vector<list_element_type<Lst>> {
   using T = list_element_type<Lst>;
   static_assert(std::is_same_v<Lst, List<T>>);
 
@@ -1338,8 +1339,7 @@ struct ListF {
 
   template <typename Fn>
   static auto fmap(Fn fn) {
-    return [fn](auto op)
-               -> typename OP<T>::template Fst<Cod<Fn>> {
+    return [fn](auto op) -> typename OP<T>::template Fst<Cod<Fn>> {
       if (op.has_value()) {
         auto [left, right] = op.value();
         auto result = fn(*left);
@@ -1352,8 +1352,7 @@ struct ListF {
   }
 
   template <typename Carrier>
-  using Alg =
-      Hom<typename OP<T>::template Fst<Carrier>, Carrier>;
+  using Alg = Hom<typename OP<T>::template Fst<Carrier>, Carrier>;
 };
 
 ListF<int>::Alg<int> sum_alg = [](auto op) -> int {
@@ -1378,8 +1377,8 @@ template <typename Carrier, typename Elem>
 auto list_cata(typename ListF<Elem>::template Alg<Carrier> alg)
     -> Hom<List<Elem>, Carrier> {
   return [alg](List<Elem> ts) {
-    return alg(ListF<Elem>::fmap(list_cata<Carrier, Elem>(alg))(
-        out(ts)));
+    return alg(
+        ListF<Elem>::fmap(list_cata<Carrier, Elem>(alg))(out(ts)));
   };
 }
 

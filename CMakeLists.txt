@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.9.1)
 project(mealy-control-demo)
 
-set(CMAKE_CXX_FLAGS "-Wall -pedantic")
+set(CMAKE_CXX_FLAGS "-Wall -pedantic -O3")
 set(CMAKE_CXX_STANDARD 17)
 
 message("C++ Compiler : ${CMAKE_CXX_COMPILER}")
