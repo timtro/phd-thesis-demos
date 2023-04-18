@@ -678,9 +678,7 @@ auto pcurry(Fn fn) {
   using V = Cod<Fn>;
 
   return [fn](T t) -> Hom<U, V> {
-    return [fn, t](U u) -> V {
-      return fn(std::pair{t, u});
-    };
+    return [fn, t](U u) -> V { return fn(std::pair{t, u}); };
   };
 }
 
@@ -940,55 +938,53 @@ TEST_CASE("Coproduct of functions as expected") {
 // Coproduct associator ................................... f[[[3
 
 template <typename T, typename U, typename V>
-auto associator_co_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
-  if (tl_ulv.index() == 0) {
+auto associator_co_fd(S<T, S<U, V>> t_uv) -> S<S<T, U>, V> {
+  if (t_uv.index() == 0) {
     if constexpr (std::is_same_v<T, Never>) {
       throw std::bad_variant_access();
     } else {
-      return inject_l<S<T, U>, V>(std::get<0>(tl_ulv));
+      return inject_l<S<T, U>, V>(std::get<0>(t_uv));
     }
   } else {
-    auto &ulv = std::get<1>(tl_ulv);
-    if (ulv.index() == 0) {
+    auto &uv = std::get<1>(t_uv);
+    if (uv.index() == 0) {
       if constexpr (std::is_same_v<U, Never>) {
         throw std::bad_variant_access();
       } else {
-        return inject_l<S<T, U>, V>(std::get<0>(ulv));
+        return inject_l<S<T, U>, V>(std::get<0>(uv));
       }
     } else {
       if constexpr (std::is_same_v<V, Never>) {
         throw std::bad_variant_access();
       } else {
-        return inject_r<S<T, U>, V>(std::get<1>(ulv));
+        return inject_r<S<T, U>, V>(std::get<1>(uv));
       }
     }
   }
 }
 
 template <typename T, typename U, typename V>
-auto associator_co_rv(S<S<T, U>, V> tlu_lv) -> S<T, S<U, V>> {
-  if (tlu_lv.index() == 0) {
-    auto &tlu = std::get<0>(tlu_lv);
-    if (tlu.index() == 0) {
+auto associator_co_rv(S<S<T, U>, V> tu_v) -> S<T, S<U, V>> {
+  if (tu_v.index() == 0) {
+    auto &tu = std::get<0>(tu_v);
+    if (tu.index() == 0) {
       if constexpr (std::is_same_v<T, Never>) {
         throw std::bad_variant_access();
       } else {
-        return inject_l<T, S<U, V>>(std::get<0>(tlu));
+        return inject_l<T, S<U, V>>(std::get<0>(tu));
       }
     } else {
       if constexpr (std::is_same_v<U, Never>) {
         throw std::bad_variant_access();
       } else {
-        return inject_r<T, S<U, V>>(
-            inject_l<U, V>(std::get<1>(tlu)));
+        return inject_r<T, S<U, V>>(std::get<1>(tu));
       }
     }
   } else {
     if constexpr (std::is_same_v<V, Never>) {
       throw std::bad_variant_access();
     } else {
-      return inject_r<T, S<U, V>>(
-          inject_r<U, V>(std::get<1>(tlu_lv)));
+      return inject_r<T, S<U, V>>(std::get<1>(tu_v));
     }
   }
 }
@@ -1015,11 +1011,30 @@ TEST_CASE(
 
 TEST_CASE("Associator diagram for coproduct") {
   // clang-format off
+  // All four values in S<A, S<B, S<C, D>>>:
   auto start_vals = std::vector<S<A, S<B, S<C, D>>>>{
-    inject_l<A, S<B, S<C, D>>>(A{}),
-    inject_r<A, S<B, S<C, D>>>(inject_l<B, S<C, D>>(B{})),
-    inject_r<A, S<B, S<C, D>>>(inject_r<B, S<C, D>>(inject_l<C, D>(C{}))),
-    inject_r<A, S<B, S<C, D>>>(inject_r<B, S<C, D>>(inject_r<C, D>(D{})))
+    inject_l<A, S<B, S<C, D>>>(
+             A{}
+    ),
+    inject_r<A, S<B, S<C, D>>>(
+         inject_l<B, S<C, D>>(
+                  B{}
+      )
+    ),
+    inject_r<A, S<B, S<C, D>>>(
+         inject_r<B, S<C, D>>(
+              inject_l<C, D>(
+                       C{}
+        )
+      )
+    ),
+    inject_r<A, S<B, S<C, D>>>(
+         inject_r<B, S<C, D>>(
+              inject_r<C, D>(
+                          D{}
+        )
+      )
+    )
   };
 
   auto cw_path = compose(
@@ -1206,9 +1221,8 @@ TEST_CASE("Distributor is an isomorphism") {
   auto rv_fw =
       compose(distributor_fw<A, B, C>, distributor_rv<A, B, C>);
 
-  for (auto each : values_rv_fw) {
+  for (auto each : values_rv_fw)
     REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
-  }
 }
 
 // ........................................................ f]]]3
