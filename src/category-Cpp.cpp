@@ -666,8 +666,8 @@ TEST_CASE("Functor laws for CHom—the covariant hom-functor") {
 
 template <typename T, typename U>
 auto ev(P<Hom<T, U>, T> fn_and_arg) {
-  auto [f, x] = fn_and_arg;
-  return std::invoke(f, x);
+  auto [fn, x] = fn_and_arg;
+  return fn(x);
 }
 
 template <typename Fn>
@@ -679,7 +679,7 @@ auto pcurry(Fn fn) {
 
   return [fn](T t) -> Hom<U, V> {
     return [fn, t](U u) -> V {
-      return std::invoke(fn, std::pair{t, u});
+      return fn(std::pair{t, u});
     };
   };
 }
@@ -703,7 +703,7 @@ auto puncurry(Fn fn) {
   using V = Cod<UtoV>;
 
   return [fn](std::pair<T, U> p) -> V {
-    return std::invoke(std::invoke(fn, p.first), p.second);
+    return fn(p.first)(p.second);
   };
 }
 
@@ -764,8 +764,11 @@ auto inject_r(U t) -> S<T, U> {
   return S<T, U>(std::in_place_index<1>, t);
 }
 
-template <typename Fn, typename Gn, typename T = Dom<Fn>,
-    typename U = Dom<Gn>, typename V = Cod<Fn>>
+// clang-format off
+template <typename Fn,          typename Gn,
+          typename T = Dom<Fn>, typename U = Dom<Gn>,
+          typename V = Cod<Fn>>
+// clang-format on
 auto fanin(Fn fn, Gn gn) -> Hom<S<T, U>, V> {
 
   static_assert(std::is_same_v<V, Cod<Gn>>);
@@ -775,26 +778,9 @@ auto fanin(Fn fn, Gn gn) -> Hom<S<T, U>, V> {
     static_assert(std::is_invocable_v<Gn, U>);
 
     if (t_or_u.index() == 0)
-      return std::invoke(fn, std::get<0>(t_or_u));
+      return fn(std::get<0>(t_or_u));
     else
-      return std::invoke(gn, std::get<1>(t_or_u));
-  };
-}
-
-// ((A → B), (C → D)) → (A + C → B + D)
-template <typename Fn, typename Gn, typename T = Dom<Fn>,
-    typename U = Dom<Gn>, typename X = Cod<Fn>,
-    typename Y = Cod<Gn>>
-auto coprod(Fn fn, Gn gn) -> Hom<S<T, U>, S<X, Y>> {
-
-  using TorU = S<T, U>;
-  using XorY = S<X, Y>;
-
-  return [fn, gn](TorU t_or_u) -> XorY {
-    if (t_or_u.index() == 0)
-      return std::invoke(fn, std::get<0>(t_or_u));
-    else
-      return std::invoke(gn, std::get<1>(t_or_u));
+      return gn(std::get<1>(t_or_u));
   };
 }
 
@@ -812,6 +798,50 @@ TEST_CASE("Equation defining fanin") {
 
   REQUIRE(fanned(actual_a) == a_or_b_to_c(actual_a));
   REQUIRE(fanned(actual_b) == a_or_b_to_c(actual_b));
+}
+
+// ((A → B), (C → D)) → (A + C → B + D)
+// clang-format off
+template <typename Fn,          typename Gn,
+          typename T = Dom<Fn>, typename U = Dom<Gn>,
+          typename X = Cod<Fn>, typename Y = Cod<Gn>>
+// clang-format on
+auto coprod(Fn fn, Gn gn) -> Hom<S<T, U>, S<X, Y>> {
+  using TorU = S<T, U>;
+  using XorY = S<X, Y>;
+
+  return [fn, gn](TorU t_or_u) -> XorY {
+    if (t_or_u.index() == 0)
+      return inject_l<X, Y>(fn(std::get<0>(t_or_u)));
+    else
+      return inject_r<X, Y>(gn(std::get<1>(t_or_u)));
+  };
+}
+
+TEST_CASE(
+    "(S, coprod) is functorial in the left- and "
+    "right-position.") {
+  // clang-format off
+  auto actual_ab = std::vector<S<A, B>>{
+      inject_l<A, B>(A{}),
+      inject_r<A, B>(B{})
+    };
+
+  for (auto &x : actual_ab) {
+    REQUIRE(
+      compose(coprod(g, id<B>), coprod(f, id<B>))(x)
+          ==
+              coprod(compose(g, f), id<B>)(x)
+    );
+
+    REQUIRE(
+      compose(coprod(id<A>, h), coprod(id<A>, g))(x)
+          ==
+              coprod(id<A>, compose(h, g))(x)
+    );
+    // clang-format on
+    REQUIRE(coprod(id<A>, id<B>)(x) == id<S<A, B>>(x));
+  }
 }
 
 // LaTeX version
@@ -848,9 +878,9 @@ struct Either {
 
     return [fn, gn](TorU t_or_u) -> XorY {
       if (t_or_u.index() == 0)
-        return inject_l<X, Y>(std::invoke(fn, std::get<0>(t_or_u)));
+        return inject_l<X, Y>(fn(std::get<0>(t_or_u)));
       else
-        return inject_r<X, Y>(std::invoke(gn, std::get<1>(t_or_u)));
+        return inject_r<X, Y>(gn(std::get<1>(t_or_u)));
     };
   };
 
@@ -874,7 +904,6 @@ TEST_CASE("S is functorial in the left- and right-position.") {
   // clang-format on
 
   for (auto &x : actual_ab) {
-
     auto bimap_l_gf =
         compose(Either::bimap(g, id<B>), Either::bimap(f, id<B>));
 
@@ -892,7 +921,6 @@ TEST_CASE("S is functorial in the left- and right-position.") {
 }
 
 TEST_CASE("Coproduct of functions as expected") {
-
   // coprod(f, h) : S<A, C> $→$ S<B, D>
   REQUIRE(std::get<0>(coprod(f, h)(inject_l<A, C>(A{}))) == B{});
   REQUIRE(std::get<1>(coprod(f, h)(inject_r<A, C>(C{}))) == D{});
@@ -912,7 +940,7 @@ TEST_CASE("Coproduct of functions as expected") {
 // Coproduct associator ................................... f[[[3
 
 template <typename T, typename U, typename V>
-auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
+auto associator_co_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
   if (tl_ulv.index() == 0) {
     if constexpr (std::is_same_v<T, Never>) {
       throw std::bad_variant_access();
@@ -938,7 +966,7 @@ auto coassociator_fd(S<T, S<U, V>> tl_ulv) -> S<S<T, U>, V> {
 }
 
 template <typename T, typename U, typename V>
-auto coassociator_rv(S<S<T, U>, V> tlu_lv) -> S<T, S<U, V>> {
+auto associator_co_rv(S<S<T, U>, V> tlu_lv) -> S<T, S<U, V>> {
   if (tlu_lv.index() == 0) {
     auto &tlu = std::get<0>(tlu_lv);
     if (tlu.index() == 0) {
@@ -969,20 +997,20 @@ TEST_CASE(
     "coassociator_fd and coassociator_rv are mutually "
     "inverse.") {
   // clang-format off
-  auto coassociator_fd_rv = compose(
-        coassociator_rv<A, B, C>,
-        coassociator_fd<A, B, C>
+  auto associator_co_fd_rv = compose(
+        associator_co_rv<A, B, C>,
+        associator_co_fd<A, B, C>
       );
-  auto coassociator_rv_fd = compose(
-        coassociator_fd<A, B, C>,
-        coassociator_rv<A, B, C>
+  auto associator_co_rv_fd = compose(
+        associator_co_fd<A, B, C>,
+        associator_co_rv<A, B, C>
       );
   // clang-format on
 
   auto a_bc = inject_l<A, S<B, C>>(A{});
-  REQUIRE(coassociator_fd_rv(a_bc) == id<S<A, S<B, C>>>(a_bc));
+  REQUIRE(associator_co_fd_rv(a_bc) == id<S<A, S<B, C>>>(a_bc));
   auto ab_c = inject_r<S<A, B>, C>(C{});
-  REQUIRE(coassociator_rv_fd(ab_c) == id<S<S<A, B>, C>>(ab_c));
+  REQUIRE(associator_co_rv_fd(ab_c) == id<S<S<A, B>, C>>(ab_c));
 }
 
 TEST_CASE("Associator diagram for coproduct") {
@@ -995,14 +1023,14 @@ TEST_CASE("Associator diagram for coproduct") {
   };
 
   auto cw_path = compose(
-        coassociator_fd<S<A, B>, C, D>,
-        coassociator_fd<A, B, S<C, D>>
+        associator_co_fd<S<A, B>, C, D>,
+        associator_co_fd<A, B, S<C, D>>
       );
 
   auto ccw_path = compose(
-        coprod(coassociator_fd<A, B, C>, id<D>),
-        coassociator_fd<A, S<B, C>, D>,
-        coprod(id<A>, coassociator_fd<B, C, D>)
+        coprod(associator_co_fd<A, B, C>, id<D>),
+        associator_co_fd<A, S<B, C>, D>,
+        coprod(id<A>, associator_co_fd<B, C, D>)
       );
   // clang-format on
   for (auto &each : start_vals)
@@ -1035,22 +1063,22 @@ struct S<Never, T> : std::variant<Never, T> {
 };
 
 template <typename T>
-auto l_counitor_fw(S<Never, T> just_t) -> T {
+auto l_unitor_co_fw(S<Never, T> just_t) -> T {
   return std::get<1>(just_t);
 }
 
 template <typename T>
-auto l_counitor_rv(T t) -> S<Never, T> {
+auto l_unitor_co_rv(T t) -> S<Never, T> {
   return inject_r<Never, T>(t);
 }
 
 template <typename T>
-auto r_counitor_fw(S<T, Never> just_t) -> T {
+auto r_unitor_co_fw(S<T, Never> just_t) -> T {
   return std::get<0>(just_t);
 }
 
 template <typename T>
-auto r_counitor_rv(T t) -> S<T, Never> {
+auto r_unitor_co_rv(T t) -> S<T, Never> {
   return inject_l<T, Never>(t);
 }
 
@@ -1060,19 +1088,19 @@ TEST_CASE("_fw and _rv are mutual inverses for L-/R-counitor") {
 
   // clang-format off
   REQUIRE(
-      compose(l_counitor_rv<A>, l_counitor_fw<A>)(ra) ==
+      compose(l_unitor_co_rv<A>, l_unitor_co_fw<A>)(ra) ==
           id<S<Never, A>>(ra)
   );
   REQUIRE(
-      compose(l_counitor_fw<A>, l_counitor_rv<A>)(A{}) ==
+      compose(l_unitor_co_fw<A>, l_unitor_co_rv<A>)(A{}) ==
           id<A>(A{})
   );
 
   REQUIRE(
-      compose(r_counitor_rv<A>, r_counitor_fw<A>)(la) ==
+      compose(r_unitor_co_rv<A>, r_unitor_co_fw<A>)(la) ==
           id<S<A, Never>>(la)
   );
-  REQUIRE(compose(r_counitor_fw<A>, r_counitor_rv<A>)(A{}) ==
+  REQUIRE(compose(r_unitor_co_fw<A>, r_unitor_co_rv<A>)(A{}) ==
           id<A>(A{})
   );
   // clang-format on
@@ -1083,13 +1111,13 @@ TEST_CASE("Unitor diagram for coproduct") {
 
   // clang-format off
   auto cw_path = compose(
-        coprod(r_counitor_fw<A>, id<B>),
-        coassociator_fd<A, Never, B>
+        coprod(r_unitor_co_fw<A>, id<B>),
+        associator_co_fd<A, Never, B>
       );
-  auto ccw_path = coprod(id<A>, l_counitor_fw<B>);
+  auto ccw_path = coprod(id<A>, l_unitor_co_fw<B>);
   // clang-format on
 
-  coassociator_fd<A, Never, B>(a_or_rb);
+  associator_co_fd<A, Never, B>(a_or_rb);
 
   REQUIRE(cw_path(a_or_rb) == ccw_path(a_or_rb));
 }
@@ -1098,7 +1126,7 @@ TEST_CASE("Unitor diagram for coproduct") {
 // Coproduct symmetric braiding ........................... f[[[3
 
 template <typename T, typename U>
-auto cobraid(S<T, U> t_or_u) -> S<U, T> {
+auto braid_co(S<T, U> t_or_u) -> S<U, T> {
   if (t_or_u.index() == 0)
     return inject_r<U, T>(std::get<0>(t_or_u));
   else
@@ -1107,7 +1135,7 @@ auto cobraid(S<T, U> t_or_u) -> S<U, T> {
 
 TEST_CASE("Braiding of coproduct is self-inverse") {
   auto ab = inject_l<A, B>(A{});
-  REQUIRE(cobraid(cobraid(ab)) == id<S<A, B>>(ab));
+  REQUIRE(braid_co(braid_co(ab)) == id<S<A, B>>(ab));
 }
 
 TEST_CASE("Braiding diagram 1 for coproduct") {
@@ -1115,14 +1143,14 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
 
   // clang-format off
   auto cw_path = compose(
-        coprod(cobraid<C, A>, id<B>),
-        coassociator_fd<C, A, B>,
-        cobraid<S<A, B>, C>
+        coprod(braid_co<C, A>, id<B>),
+        associator_co_fd<C, A, B>,
+        braid_co<S<A, B>, C>
       );
   auto ccw_path = compose(
-        coassociator_fd<A, C, B>,
-        coprod(id<A>, cobraid<B, C>),
-        coassociator_rv<A, B, C>
+        associator_co_fd<A, C, B>,
+        coprod(id<A>, braid_co<B, C>),
+        associator_co_rv<A, B, C>
       );
   // clang-format on
 
