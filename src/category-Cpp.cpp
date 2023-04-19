@@ -1138,12 +1138,31 @@ auto braid_co(S<T, U> t_or_u) -> S<U, T> {
 }
 
 TEST_CASE("Braiding of coproduct is self-inverse") {
-  auto ab = inject_l<A, B>(A{});
-  REQUIRE(braid_co(braid_co(ab)) == id<S<A, B>>(ab));
+  auto ab = std::vector<S<A, B>>{
+    inject_l<A, B>(A{}),
+    inject_r<A, B>(B{})
+  };
+
+  for (auto each: ab)
+    REQUIRE(braid_co(braid_co(each)) == id<S<A, B>>(each));
 }
 
 TEST_CASE("Braiding diagram 1 for coproduct") {
-  auto start = compose(inject_l<S<A, B>, C>, inject_r<A, B>)(B{});
+  auto start_vals = std::vector<S<S<A, B>, C>>{
+    inject_l<S<A, B>, C>(
+      inject_l<A, B>(
+               A{}
+      )
+    ),
+    inject_l<S<A, B>, C>(
+      inject_r<A, B>(
+                  B{}
+      )
+    ),
+    inject_r<S<A, B>, C>(
+                      C{}
+    ),
+  };
 
   // clang-format off
   auto cw_path = compose(
@@ -1157,8 +1176,8 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
         associator_co_rv<A, B, C>
       );
   // clang-format on
-
-  REQUIRE(cw_path(start) == ccw_path(start));
+  for (auto each: start_vals)
+    REQUIRE(cw_path(each) == ccw_path(each));
 }
 // ........................................................ f]]]3
 // ........................................................ f]]]2
