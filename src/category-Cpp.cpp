@@ -749,7 +749,11 @@ struct S : std::variant<T, U> {
 struct Never { // Monoidal unit for S
   Never() = delete;
   Never(const Never &) = delete;
-  bool operator==(const Never &) const { return false; }
+  bool operator==(const Never &) const {
+    throw std::domain_error(
+        "Never instances should not exist, and "
+        "must have done something perverse.");
+  }
 };
 
 template <typename T, typename U>
