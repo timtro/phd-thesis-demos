@@ -943,7 +943,7 @@ TEST_CASE("Coproduct of functions as expected") {
 // Coproduct associator ................................... f[[[3
 
 template <typename T, typename U, typename V>
-auto associator_co_fd_thesis(S<T, S<U, V>> t_uv) -> S<S<T, U>, V> {
+auto associator_co_fd(S<T, S<U, V>> t_uv) -> S<S<T, U>, V> {
   if (t_uv.index() == 0) {
     if constexpr (!std::is_same_v<T, Never>)
       return inject_l<S<T, U>, V>(std::get<0>(t_uv));
@@ -957,10 +957,11 @@ auto associator_co_fd_thesis(S<T, S<U, V>> t_uv) -> S<S<T, U>, V> {
         return inject_r<S<T, U>, V>(std::get<1>(uv));
     }
   }
+  throw std::domain_error("Recieved a variant with no value.");
 }
 
 template <typename T, typename U, typename V>
-auto associator_co_rv_thesis(S<S<T, U>, V> tu_v) -> S<T, S<U, V>> {
+auto associator_co_rv(S<S<T, U>, V> tu_v) -> S<T, S<U, V>> {
   if (tu_v.index() == 0) {
     auto &tu = std::get<0>(tu_v);
     if (tu.index() == 0) {
@@ -974,58 +975,7 @@ auto associator_co_rv_thesis(S<S<T, U>, V> tu_v) -> S<T, S<U, V>> {
     if constexpr (!std::is_same_v<V, Never>)
       return inject_r<T, S<U, V>>(std::get<1>(tu_v));
   }
-}
-
-template <typename T, typename U, typename V>
-auto associator_co_fd(S<T, S<U, V>> t_uv) -> S<S<T, U>, V> {
-  if (t_uv.index() == 0) {
-    if constexpr (std::is_same_v<T, Never>) {
-      throw std::bad_variant_access();
-    } else {
-      return inject_l<S<T, U>, V>(std::get<0>(t_uv));
-    }
-  } else {
-    auto &uv = std::get<1>(t_uv);
-    if (uv.index() == 0) {
-      if constexpr (std::is_same_v<U, Never>) {
-        throw std::bad_variant_access();
-      } else {
-        return inject_l<S<T, U>, V>(std::get<0>(uv));
-      }
-    } else {
-      if constexpr (std::is_same_v<V, Never>) {
-        throw std::bad_variant_access();
-      } else {
-        return inject_r<S<T, U>, V>(std::get<1>(uv));
-      }
-    }
-  }
-}
-
-template <typename T, typename U, typename V>
-auto associator_co_rv(S<S<T, U>, V> tu_v) -> S<T, S<U, V>> {
-  if (tu_v.index() == 0) {
-    auto &tu = std::get<0>(tu_v);
-    if (tu.index() == 0) {
-      if constexpr (std::is_same_v<T, Never>) {
-        throw std::bad_variant_access();
-      } else {
-        return inject_l<T, S<U, V>>(std::get<0>(tu));
-      }
-    } else {
-      if constexpr (std::is_same_v<U, Never>) {
-        throw std::bad_variant_access();
-      } else {
-        return inject_r<T, S<U, V>>(std::get<1>(tu));
-      }
-    }
-  } else {
-    if constexpr (std::is_same_v<V, Never>) {
-      throw std::bad_variant_access();
-    } else {
-      return inject_r<T, S<U, V>>(std::get<1>(tu_v));
-    }
-  }
+  throw std::domain_error("Recieved a variant with no value.");
 }
 
 TEST_CASE(
