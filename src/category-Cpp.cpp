@@ -1138,16 +1138,19 @@ auto braid_co(S<T, U> t_or_u) -> S<U, T> {
 }
 
 TEST_CASE("Braiding of coproduct is self-inverse") {
+  // clang-format off
   auto ab = std::vector<S<A, B>>{
     inject_l<A, B>(A{}),
     inject_r<A, B>(B{})
   };
+  //clang-format on
 
   for (auto each: ab)
     REQUIRE(braid_co(braid_co(each)) == id<S<A, B>>(each));
 }
 
 TEST_CASE("Braiding diagram 1 for coproduct") {
+  // clang-format off
   auto start_vals = std::vector<S<S<A, B>, C>>{
     inject_l<S<A, B>, C>(
       inject_l<A, B>(
@@ -1164,7 +1167,6 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
     ),
   };
 
-  // clang-format off
   auto cw_path = compose(
         coprod(braid_co<C, A>, id<B>),
         associator_co_fd<C, A, B>,
@@ -1176,7 +1178,7 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
         associator_co_rv<A, B, C>
       );
   // clang-format on
-  for (auto each: start_vals)
+  for (auto each : start_vals)
     REQUIRE(cw_path(each) == ccw_path(each));
 }
 // ........................................................ f]]]3
@@ -1210,16 +1212,39 @@ auto distributor_rv(P<S<T, U>, X> t_or_u_and_x)
     return inject_r<P<T, X>, P<U, X>>({std::get<1>(t_u), x});
 }
 
+template<typename T, typename U, typename X>
+auto factorise(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X> {
+  // clang-format off
+  const auto d = fanin(
+        prod(inject_l<T, U>, id<X>),
+        prod(inject_r<T, U>, id<X>)
+      );
+  // clang-format on
+
+  return d(tx_ux);
+}
+
+template <typename T, typename U, typename X>
+auto expand(P<S<T, U>, X> t_or_u_and_x)
+    -> S<P<T, X>, P<U, X>> {
+  auto [t_u, x] = t_or_u_and_x;
+  if (t_u.index() == 0)
+    return inject_l<P<T, X>, P<U, X>>({std::get<0>(t_u), x});
+  else
+    return inject_r<P<T, X>, P<U, X>>({std::get<1>(t_u), x});
+}
+
 TEST_CASE("Distributor is an isomorphism") {
 
-  auto values_fw_rv = std::vector<S<P<A, C>, P<B, C>>>{
+  auto values = std::vector<S<P<A, C>, P<B, C>>>{
       inject_l<P<A, C>, P<B, C>>({A{}, C{}}),
       inject_r<P<A, C>, P<B, C>>({B{}, C{}})};
 
-  auto fw_rv =
-      compose(distributor_rv<A, B, C>, distributor_fw<A, B, C>);
 
-  for (auto each : values_fw_rv) {
+  auto fw_rv =
+      compose(expand<A, B, C>, factorise<A, B, C>);
+
+  for (auto each : values) {
     REQUIRE(fw_rv(each) == id<S<P<A, C>, P<B, C>>>(each));
   }
 
@@ -1227,7 +1252,7 @@ TEST_CASE("Distributor is an isomorphism") {
       {inject_l<A, B>(A{}), C{}}, {inject_r<A, B>(B{}), C{}}};
 
   auto rv_fw =
-      compose(distributor_fw<A, B, C>, distributor_rv<A, B, C>);
+      compose(factorise<A, B, C>, expand<A, B, C>);
 
   for (auto each : values_rv_fw)
     REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
