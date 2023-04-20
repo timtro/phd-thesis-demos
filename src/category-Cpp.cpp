@@ -1,4 +1,4 @@
-// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+// S<P<T, X>, P<U, X>o vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <bits/utility.h>
 #include <catch2/catch.hpp>
 #include <cctype>
@@ -671,12 +671,14 @@ auto ev(P<Hom<T, U>, T> fn_and_arg) {
   return fn(x);
 }
 
-template <typename Fn>
-auto pcurry(Fn fn) {
-  using TU = Dom<Fn>;
-  using T = std::tuple_element_t<0, TU>;
-  using U = std::tuple_element_t<1, TU>;
-  using V = Cod<Fn>;
+template <typename Fn, typename TU = Dom<Fn>,
+    typename T = std::tuple_element_t<0, TU>,
+    typename U = std::tuple_element_t<1, TU>, typename V = Cod<Fn>>
+auto pcurry(Fn fn) -> Hom<T, Hom<U, V>> {
+  // using TU = Dom<Fn>;
+  // using T = std::tuple_element_t<0, TU>;
+  // using U = std::tuple_element_t<1, TU>;
+  // using V = Cod<Fn>;
 
   return [fn](T t) -> Hom<U, V> {
     return [fn, t](U u) -> V { return fn(std::pair{t, u}); };
@@ -1192,70 +1194,67 @@ TEST_CASE("Braiding diagram 1 for coproduct") {
 //   point across.
 
 template <typename T, typename U, typename X>
-auto distributor_fw(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X> {
-  if (tx_ux.index() == 0) {
-    auto [t, x] = std::get<0>(tx_ux);
-    return {inject_l<T, U>(t), x};
-  } else {
-    auto [u, x] = std::get<1>(tx_ux);
-    return {inject_r<T, U>(u), x};
-  }
-}
-
-template <typename T, typename U, typename X>
-auto distributor_rv(P<S<T, U>, X> t_or_u_and_x)
-    -> S<P<T, X>, P<U, X>> {
-  auto [t_u, x] = t_or_u_and_x;
-  if (t_u.index() == 0)
-    return inject_l<P<T, X>, P<U, X>>({std::get<0>(t_u), x});
-  else
-    return inject_r<P<T, X>, P<U, X>>({std::get<1>(t_u), x});
-}
-
-template<typename T, typename U, typename X>
 auto factorise(S<P<T, X>, P<U, X>> tx_ux) -> P<S<T, U>, X> {
   // clang-format off
-  const auto d = fanin(
+  const auto universal_factorise = fanin(
         prod(inject_l<T, U>, id<X>),
         prod(inject_r<T, U>, id<X>)
       );
   // clang-format on
 
-  return d(tx_ux);
+  return universal_factorise(tx_ux);
 }
 
-template <typename T, typename U, typename X>
-auto expand(P<S<T, U>, X> t_or_u_and_x)
-    -> S<P<T, X>, P<U, X>> {
-  auto [t_u, x] = t_or_u_and_x;
-  if (t_u.index() == 0)
-    return inject_l<P<T, X>, P<U, X>>({std::get<0>(t_u), x});
-  else
-    return inject_r<P<T, X>, P<U, X>>({std::get<1>(t_u), x});
+template <typename T, typename U, typename Z>
+auto expand(P<S<T, U>, Z> t_or_u_and_x) -> S<P<T, Z>, P<U, Z>> {
+  // clang-format off
+  // tz : T $×$ Z → (T $×$ Z) + (U $×$ Z)
+  const auto tz =
+      pcurry(compose(
+              inject_l<P<T, Z>, P<U, Z>>,
+              id<P<T, Z>>
+            ));
+  // uz : U $×$ Z → (T $×$ Z) + (U $×$ Z)
+  const auto uz =
+      pcurry(compose(
+              inject_r<P<T, Z>, P<U, Z>>,
+              id<P<U, Z>>
+            ));
+
+  // tz_uz : (T + U) → Z $⊸$ (T $×$ Z) + (U $×$ Z)
+  const auto tz_uz = fanin(tz, uz);
+  // universal_expand : (T + U) $×$ Z  $⊸$  (T $×$ Z) + (U $×$ Z)
+  const auto universal_expand = puncurry(tz_uz);
+  // clang-format on
+
+  return universal_expand(t_or_u_and_x);
 }
 
-TEST_CASE("Distributor is an isomorphism") {
+TEST_CASE("expand and factorise are mutually inverse") {
 
-  auto values = std::vector<S<P<A, C>, P<B, C>>>{
-      inject_l<P<A, C>, P<B, C>>({A{}, C{}}),
-      inject_r<P<A, C>, P<B, C>>({B{}, C{}})};
+  SECTION("in the forward then reverse direction") {
+    auto values = std::vector<S<P<A, C>, P<B, C>>>{
+        inject_l<P<A, C>, P<B, C>>({A{}, C{}}),
+        inject_r<P<A, C>, P<B, C>>({B{}, C{}})};
 
+    auto fw_rv = compose(expand<A, B, C>, factorise<A, B, C>);
 
-  auto fw_rv =
-      compose(expand<A, B, C>, factorise<A, B, C>);
-
-  for (auto each : values) {
-    REQUIRE(fw_rv(each) == id<S<P<A, C>, P<B, C>>>(each));
+    for (auto each : values) {
+      REQUIRE(fw_rv(each) == id<S<P<A, C>, P<B, C>>>(each));
+    }
   }
 
-  auto values_rv_fw = std::vector<P<S<A, B>, C>>{
-      {inject_l<A, B>(A{}), C{}}, {inject_r<A, B>(B{}), C{}}};
+  SECTION("and in the opposite direction") {
+    auto values = std::vector<P<S<A, B>, C>>{
+        {inject_l<A, B>(A{}), C{}},
+        {inject_r<A, B>(B{}), C{}}
+      };
 
-  auto rv_fw =
-      compose(factorise<A, B, C>, expand<A, B, C>);
+    auto rv_fw = compose(factorise<A, B, C>, expand<A, B, C>);
 
-  for (auto each : values_rv_fw)
-    REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
+    for (auto each : values)
+      REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
+  }
 }
 
 // ........................................................ f]]]3
