@@ -1337,7 +1337,7 @@ TEST_CASE("Structure of OPInt") {
   // clang-format on
 }
 // ........................................................ f]]]3
-// List = List = Mu<OP<T>::template Fst> .................. f[[[3
+// List = List = Mu<OP<T>::template Left> .................. f[[[3
 template <template <typename> class F>
 struct Mu : F<Mu<F>> {
   explicit Mu(F<Mu<F>> f) : F<Mu<F>>(f) {}
@@ -1356,23 +1356,29 @@ auto out(Mu<F> f) -> F<Mu<F>> {
 template <typename T>
 struct OP {
   template <typename U>
-  using Fst = std::optional<P<std::shared_ptr<U>, T>>;
+  using Left = S<I, P<std::shared_ptr<U>, T>>;
 };
 
 template <typename T>
-using SnocList = Mu<OP<T>::template Fst>;
+using SnocList = Mu<OP<T>::template Left>;
 
 template <typename Lst>
 using list_element_type = typename std::remove_reference<
-    decltype(*out(std::declval<Lst>()))>::type::second_type;
+    decltype(std::get<1>(out(std::declval<Lst>())))>::type::
+    second_type;
 
 template <typename T>
-auto nil = in<OP<T>::template Fst>(std::nullopt);
+auto nil = in<OP<T>::template Left>(I{});
 
 template <typename T>
 auto snoc(SnocList<T> lst, T t) -> SnocList<T> {
-  return in<OP<T>::template Fst>(
+  return in<OP<T>::template Left>(
       std::make_pair(std::make_shared<SnocList<T>>(lst), t));
+}
+
+template <typename T, typename U>
+constexpr bool has_pair(S<I, P<T, U>> const &i_or_val) {
+  return i_or_val.index() == 1;
 }
 
 template <typename Lst, typename T = list_element_type<Lst>>
@@ -1380,9 +1386,9 @@ auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
   auto l = out(lhs);
   auto r = out(rhs);
 
-  while (l.has_value() && r.has_value()) {
-    auto [lhs_tail, lhs_val] = l.value();
-    auto [rhs_tail, rhs_val] = r.value();
+  while (has_pair(l) && has_pair(r)) {
+    auto [lhs_tail, lhs_val] = std::get<1>(l);
+    auto [rhs_tail, rhs_val] = std::get<1>(r);
     if (!(lhs_val == rhs_val)) {
       return false;
     }
@@ -1390,9 +1396,9 @@ auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
     r = *rhs_tail;
   }
 
-  // If one of a or b still holds value at this point, then lhs
+  // If one of l or r still hold a pair at this point, then lhs
   // and rhs are different lengths and are not equal.
-  return !l.has_value() && !r.has_value();
+  return !has_pair(l) && !has_pair(r);
 }
 
 TEST_CASE("Building `List`s") {
@@ -1419,8 +1425,8 @@ auto to_vector(const Lst lst)
 
   std::vector<T> output;
   auto outermost = out(lst);
-  while (outermost != std::nullopt) {
-    auto [tail, head] = outermost.value();
+  while (has_pair(outermost)) {
+    auto [tail, head] = std::get<1>(outermost);
     output.push_back(head);
     outermost = out(*tail);
   }
@@ -1433,7 +1439,7 @@ auto to_vector(const Lst lst)
 template <typename T>
 auto to_snoclist(const std::vector<T> &vec) -> SnocList<T> {
 
-  SnocList<T> accumulator = in<OP<T>::template Fst>(std::nullopt);
+  SnocList<T> accumulator = in<OP<T>::template Left>(I{});
 
   for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
     accumulator = snoc(accumulator, *it);
@@ -1468,24 +1474,25 @@ template <typename T>
 struct SnocF {
 
   template <typename U>
-  using Of = typename OP<T>::template Fst<U>;
+  using Of = typename OP<T>::template Left<U>;
 
   template <typename Fn>
-  static auto fmap(Fn fn) {
-    return [fn](auto op) -> typename OP<T>::template Fst<Cod<Fn>> {
-      if (op.has_value()) {
-        auto [left, right] = op.value();
+  static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+    return [fn](Of<Dom<Fn>> i_or_p) -> Of<Cod<Fn>> {
+      if (has_pair(i_or_p)) {
+        auto [left, right] = std::get<1>(i_or_p);
         auto result = fn(*left);
         using result_t = decltype(result);
-        return {{std::make_shared<result_t>(result), right}};
+        return std::make_pair(
+            std::make_shared<result_t>(result), right);
       } else {
-        return std::nullopt;
+        return I{};
       }
     };
   }
 
   template <typename Carrier>
-  using Alg = Hom<typename OP<T>::template Fst<Carrier>, Carrier>;
+  using Alg = Hom<typename OP<T>::template Left<Carrier>, Carrier>;
 
   template <typename Carrier>
   static auto cata(Alg<Carrier> alg) -> Hom<SnocList<T>, Carrier> {
@@ -1496,8 +1503,8 @@ struct SnocF {
 };
 
 auto sum_alg = [](auto op) -> int {
-  if (op.has_value()) {
-    auto [l, r] = op.value();
+  if (has_pair(op)) {
+    auto [l, r] = std::get<1>(op);
     return *l + r;
   } else {
     return 0;
@@ -1505,8 +1512,8 @@ auto sum_alg = [](auto op) -> int {
 };
 
 auto len_alg = [](auto op) -> int {
-  if (op.has_value()) {
-    auto [l, r] = op.value();
+  if (has_pair(op)) {
+    auto [l, r] = std::get<1>(op);
     return *l + 1;
   } else {
     return 0;
