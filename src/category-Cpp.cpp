@@ -1231,7 +1231,7 @@ auto expand(P<S<T, U>, Z> t_or_u_and_x) -> S<P<T, Z>, P<U, Z>> {
 }
 
 TEST_CASE("expand and factorise are mutually inverse") {
-
+  // clang-format off
   SECTION("in the forward then reverse direction") {
     auto values = std::vector<S<P<A, C>, P<B, C>>>{
         inject_l<P<A, C>, P<B, C>>({A{}, C{}}),
@@ -1255,6 +1255,7 @@ TEST_CASE("expand and factorise are mutually inverse") {
     for (auto each : values)
       REQUIRE(rv_fw(each) == id<P<S<A, B>, C>>(each));
   }
+  // clang-format on
 }
 
 // ........................................................ f]]]3
@@ -1290,74 +1291,88 @@ TEST_CASE("f(T₁, T₂, T₃, …, Tₙ) ≅ f(tuple<T₁, T₂, T₃, …, T�
 
 // ........................................................ f]]]2
 // OP<T> functor fixpoint ................................. f[[[2
+// Non-functional demonstration ........................... f[[[3
+template <typename T>
+using OPInt = std::optional<P<T, int>>;
 
+TEST_CASE("Structure of OPInt") {
+
+  using AtMost3Ints = OPInt<OPInt<OPInt<std::nullopt_t>>>;
+
+  // clang-format off
+  auto three_ints =
+      AtMost3Ints{{{{{{{std::nullopt}, 1}}, 2}}, 3}};
+  auto two_ints =
+      AtMost3Ints{{{{{std::nullopt}, 4}}, 5}};;
+  auto no_ints =
+      AtMost3Ints{{std::nullopt}};;
+  // clang-format on
+
+  auto pop = [](AtMost3Ints as) -> OPInt<AtMost3Ints> {
+    if (as) {
+      auto [tail, head] = as.value();
+      return {{tail, head}};
+    } else {
+      return std::nullopt;
+    }
+  };
+
+  REQUIRE(pop(no_ints) == std::nullopt);
+  // pop gives us head (first) and tail (second)
+  REQUIRE(pop(three_ints).value().second == 3);
+  // pop(two_ints) is just two_ints
+  REQUIRE(
+      pop(three_ints).value().second == three_ints.value().second);
+
+  //
+  auto one_int = pop(two_ints).value().first;
+  REQUIRE(one_int.value().second == 4);
+
+  // clang-format off
+  // This doesn't type-check because
+  //   $\ttName{IPInt}^{∘\liningnums 4}⟨·⟩ ≆ \ttName{IPInt}^{∘\liningnums 3}⟨·⟩$.
+  // auto push = [](OPInt<AtMost3Ints> tl_hd) -> AtMost3Ints {
+  //   return tl_hd;
+  // };
+  // clang-format on
+}
+// ........................................................ f]]]3
+// List = List = Mu<OP<T>::template Fst> .................. f[[[3
 template <template <typename> class F>
-struct Fix : F<Fix<F>> {
-  explicit Fix(F<Fix<F>> f) : F<Fix<F>>(f) {}
+struct Mu : F<Mu<F>> {
+  explicit Mu(F<Mu<F>> f) : F<Mu<F>>(f) {}
 };
 
 template <template <typename> class F>
-Fix<F> in(F<Fix<F>> f) {
-  return Fix<F>{f};
+auto in(F<Mu<F>> f) -> Mu<F> {
+  return Mu<F>{f};
 }
 
 template <template <typename> class F>
-F<Fix<F>> out(Fix<F> f) {
+auto out(Mu<F> f) -> F<Mu<F>> {
   return f;
 }
 
 template <typename T>
-using O = std::optional<T>;
-
-template <typename T>
 struct OP {
   template <typename U>
-  using Fst = O<P<std::shared_ptr<U>, T>>;
+  using Fst = std::optional<P<std::shared_ptr<U>, T>>;
 };
 
 template <typename T>
-using List = Fix<OP<T>::template Fst>;
-
-template <typename T>
-auto snoc(List<T> l, T t) -> List<T> {
-  return in<OP<T>::template Fst>(
-      std::make_pair(std::make_shared<List<T>>(l), t));
-}
+using SnocList = Mu<OP<T>::template Fst>;
 
 template <typename Lst>
 using list_element_type = typename std::remove_reference<
     decltype(*out(std::declval<Lst>()))>::type::second_type;
 
-static_assert(std::is_same_v<list_element_type<List<int>>, int>);
-
-template <typename Lst>
-auto to_vector(const Lst l) -> std::vector<list_element_type<Lst>> {
-  using T = list_element_type<Lst>;
-  static_assert(std::is_same_v<Lst, List<T>>);
-
-  std::vector<T> output;
-  auto outermost = out(l);
-  while (outermost != std::nullopt) {
-    auto [tail, head] = outermost.value();
-    output.push_back(head);
-    outermost = out(*tail);
-  }
-
-  std::reverse(output.begin(), output.end());
-
-  return output;
-}
+template <typename T>
+auto nil = in<OP<T>::template Fst>(std::nullopt);
 
 template <typename T>
-auto to_snoclist(const std::vector<T> &vec) -> List<T> {
-
-  List<T> accumulator = in<OP<T>::template Fst>(std::nullopt);
-
-  for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
-    accumulator = snoc(accumulator, *it);
-  }
-
-  return accumulator;
+auto snoc(SnocList<T> lst, T t) -> SnocList<T> {
+  return in<OP<T>::template Fst>(
+      std::make_pair(std::make_shared<SnocList<T>>(lst), t));
 }
 
 template <typename Lst, typename T = list_element_type<Lst>>
@@ -1380,8 +1395,52 @@ auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
   return !l.has_value() && !r.has_value();
 }
 
+TEST_CASE("Building `List`s") {
+
+  auto list_ints = snoc(snoc(snoc(nil<int>, 1), 2), 3);
+  auto another_list_ints =
+      snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
+
+  REQUIRE(std::is_same_v<SnocList<int>, decltype(list_ints)>);
+  REQUIRE(
+      std::is_same_v<list_element_type<decltype(list_ints)>, int>);
+
+  REQUIRE(list_ints == list_ints);
+  // NB: require_FALSE:
+  REQUIRE_FALSE(list_ints == another_list_ints);
+}
+// ........................................................ f]]]3
+// Isomorphism between List and std::vector ............... f[[[3
+template <typename Lst>
+auto to_vector(const Lst lst)
+    -> std::vector<list_element_type<Lst>> {
+  using T = list_element_type<Lst>;
+  static_assert(std::is_same_v<Lst, SnocList<T>>);
+
+  std::vector<T> output;
+  auto outermost = out(lst);
+  while (outermost != std::nullopt) {
+    auto [tail, head] = outermost.value();
+    output.push_back(head);
+    outermost = out(*tail);
+  }
+
+  std::reverse(output.begin(), output.end());
+
+  return output;
+}
+
 template <typename T>
-auto nil = in<OP<T>::template Fst>(std::nullopt);
+auto to_snoclist(const std::vector<T> &vec) -> SnocList<T> {
+
+  SnocList<T> accumulator = in<OP<T>::template Fst>(std::nullopt);
+
+  for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
+    accumulator = snoc(accumulator, *it);
+  }
+
+  return accumulator;
+}
 
 TEST_CASE(
     "Arbitrary nested optional-pairs isomorphic to "
@@ -1399,14 +1458,14 @@ TEST_CASE(
   REQUIRE(list_as == to_snoclist(vec_as));
   REQUIRE(list_ints == to_snoclist(vec_ints));
 
-  REQUIRE(to_vector(to_snoclist(std::vector{1, 2, 3})) ==
-          std::vector{1, 2, 3});
+  REQUIRE(to_vector(to_snoclist(vec_ints)) == vec_ints);
+  REQUIRE(to_snoclist(to_vector(list_ints)) == list_ints);
 }
-
+// ........................................................ f]]]3
 // List<T>-catamorphisms .................................. f[[[3
 
 template <typename T>
-struct ListF {
+struct SnocF {
 
   template <typename U>
   using Of = typename OP<T>::template Fst<U>;
@@ -1417,8 +1476,8 @@ struct ListF {
       if (op.has_value()) {
         auto [left, right] = op.value();
         auto result = fn(*left);
-        return std::make_optional(std::make_pair(
-            std::make_shared<decltype(result)>(result), right));
+        using result_t = decltype(result);
+        return {{std::make_shared<result_t>(result), right}};
       } else {
         return std::nullopt;
       }
@@ -1427,9 +1486,16 @@ struct ListF {
 
   template <typename Carrier>
   using Alg = Hom<typename OP<T>::template Fst<Carrier>, Carrier>;
+
+  template <typename Carrier>
+  static auto cata(Alg<Carrier> alg) -> Hom<SnocList<T>, Carrier> {
+    return [alg](SnocList<T> ts) {
+      return alg(SnocF<T>::fmap(cata<Carrier>(alg))(out(ts)));
+    };
+  }
 };
 
-ListF<int>::Alg<int> sum_alg = [](auto op) -> int {
+auto sum_alg = [](auto op) -> int {
   if (op.has_value()) {
     auto [l, r] = op.value();
     return *l + r;
@@ -1447,31 +1513,22 @@ auto len_alg = [](auto op) -> int {
   }
 };
 
-template <typename Carrier, typename Elem>
-auto list_cata(typename ListF<Elem>::template Alg<Carrier> alg)
-    -> Hom<List<Elem>, Carrier> {
-  return [alg](List<Elem> ts) {
-    return alg(
-        ListF<Elem>::fmap(list_cata<Carrier, Elem>(alg))(out(ts)));
-  };
-}
-
 TEST_CASE(
     "Testing catamorphisms with sum algebra on integer "
     "lists, and length algebras on integer- and "
     "A-lists") {
   auto list_ints = snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
 
-  auto sum_int_list = list_cata<int, int>(sum_alg);
+  auto sum_int_list = SnocF<int>::cata<int>(sum_alg);
   auto sum = sum_int_list(list_ints);
   REQUIRE(sum == 1 + 2 + 3 + 4);
 
-  auto len_int_list = list_cata<int, int>(len_alg);
+  auto len_int_list = SnocF<int>::cata<int>(len_alg);
   auto len = len_int_list(list_ints);
   REQUIRE(len == 4);
 
   auto list_as = snoc(snoc(nil<A>, A{}), A{});
-  auto len_a_list = list_cata<int, A>(len_alg);
+  auto len_a_list = SnocF<A>::cata<int>(len_alg);
   REQUIRE(len_a_list(list_as) == 2);
 }
 
