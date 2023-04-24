@@ -323,7 +323,24 @@ TEST_CASE("Test naturality square for len.") {
 // Categorical product bifunctor .......................... f[[[3
 
 template <typename T, typename U>
-using P = std::pair<T, U>;
+struct P : std::pair<T, U> {
+  using std::pair<T, U>::pair;
+};
+
+template <typename T, typename U>
+P(T, U) -> P<T, U>;
+
+namespace std {
+  template <typename T, typename U>
+  struct tuple_element<0, P<T, U>> {
+    using type = T;
+  };
+
+  template <typename T, typename U>
+  struct tuple_element<1, P<T, U>> {
+    using type = U;
+  };
+} // namespace std
 
 template <typename T, typename U>
 auto proj_l(P<T, U> tu) -> T {
@@ -398,20 +415,6 @@ TEST_CASE("Pair is functorial in the left position.") {
   REQUIRE(Pair::bimap(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
 }
 
-// This is cute, but doesn't really make the code more readable:
-//
-// template <typename Fn, typename Gn>
-// auto operator*(Fn f, Gn g)
-//     -> Hom<P<Dom<Fn>, Dom<Gn>>, P<Cod<Fn>, Cod<Gn>>> {
-//   using TandU = P<Dom<Fn>, Dom<Gn>>;
-//   using XandY = P<Cod<Fn>, Cod<Gn>>;
-//
-//   return [f, g](TandU tu) -> XandY {
-//     auto [t, u] = tu;
-//     return {f(t), g(u)};
-//   };
-// }
-
 // clang-format off
 template <typename Fn,          typename Gn,
           typename T = Dom<Fn>, typename U = Dom<Gn>,
@@ -419,11 +422,11 @@ template <typename Fn,          typename Gn,
 // clang-format on
 auto fanout(Fn fn, Gn gn) -> Hom<T, P<X, Y>> {
   static_assert(std::is_same_v<T, U>);
-  return [fn, gn](auto t) {
+  return [fn, gn](auto t) -> P<X, Y> {
     static_assert(std::is_invocable_v<Fn, decltype(t)>);
     static_assert(std::is_invocable_v<Gn, decltype(t)>);
 
-    return P<X, Y>{fn(t), gn(t)};
+    return {fn(t), gn(t)};
   };
 }
 
@@ -678,7 +681,7 @@ template <typename Fn, typename TU = Dom<Fn>,
 // clang-format on
 auto pcurry(Fn fn) -> Hom<T, Hom<U, V>> {
   return [fn](T t) -> Hom<U, V> {
-    return [fn, t](U u) -> V { return fn(P<T, U>{t, u}); };
+    return [fn, t](U u) -> V { return fn({t, u}); };
   };
 }
 
@@ -742,6 +745,9 @@ struct S : std::variant<T, U> {
 
   S() = delete;
 };
+
+template <typename T, typename U>
+S(T, U) -> S<T, U>;
 
 template <std::size_t N, typename S>
 struct sum_term;
@@ -1300,54 +1306,8 @@ TEST_CASE("f(T₁, T₂, T₃, …, Tₙ) ≅ f(tuple<T₁, T₂, T₃, …, T�
 }
 
 // ........................................................ f]]]2
-// OP<T> functor fixpoint ................................. f[[[2
-// Non-functional demonstration ........................... f[[[3
-template <typename T>
-using OPInt = std::optional<P<T, int>>;
-
-TEST_CASE("Structure of OPInt") {
-
-  using AtMost3Ints = OPInt<OPInt<OPInt<std::nullopt_t>>>;
-
-  // clang-format off
-  auto three_ints =
-      AtMost3Ints{{{{{{{std::nullopt}, 1}}, 2}}, 3}};
-  auto two_ints =
-      AtMost3Ints{{{{{std::nullopt}, 4}}, 5}};;
-  auto no_ints =
-      AtMost3Ints{{std::nullopt}};;
-  // clang-format on
-
-  auto pop = [](AtMost3Ints as) -> OPInt<AtMost3Ints> {
-    if (as) {
-      auto [tail, head] = as.value();
-      return {{tail, head}};
-    } else {
-      return std::nullopt;
-    }
-  };
-
-  REQUIRE(pop(no_ints) == std::nullopt);
-  // pop gives us head (first) and tail (second)
-  REQUIRE(pop(three_ints).value().second == 3);
-  // pop(two_ints) is just two_ints
-  REQUIRE(
-      pop(three_ints).value().second == three_ints.value().second);
-
-  //
-  auto one_int = pop(two_ints).value().first;
-  REQUIRE(one_int.value().second == 4);
-
-  // clang-format off
-  // This doesn't type-check because
-  //   $\ttName{IPInt}^{∘\liningnums 4}⟨·⟩ ≆ \ttName{IPInt}^{∘\liningnums 3}⟨·⟩$.
-  // auto push = [](OPInt<AtMost3Ints> tl_hd) -> AtMost3Ints {
-  //   return tl_hd;
-  // };
-  // clang-format on
-}
-// ........................................................ f]]]3
-// List = List = Mu<OP<T>::template Left> .................. f[[[3
+// MP<T> functor fixpoint ................................. f[[[2
+// List = List = Mu<MP<T>::template Left> ................. f[[[3
 template <template <typename> class F>
 struct Mu : F<Mu<F>> {
   explicit Mu(F<Mu<F>> f) : F<Mu<F>>(f) {}
@@ -1364,15 +1324,20 @@ auto out(Mu<F> f) -> F<Mu<F>> {
 }
 
 template <typename T>
-struct OP {
+struct MP {
   template <typename U>
   using Left = S<I, P<std::shared_ptr<U>, T>>;
 
   using Right = T; // not really usable.
 };
 
+template <typename T, typename U>
+constexpr bool has_pair(S<I, P<T, U>> const &i_or_val) {
+  return i_or_val.index() == 1;
+}
+
 template <typename T>
-using SnocList = Mu<OP<T>::template Left>;
+using SnocList = Mu<MP<T>::template Left>;
 
 template <typename Lst>
 using list_element_type = typename std::remove_reference<
@@ -1380,17 +1345,12 @@ using list_element_type = typename std::remove_reference<
     second_type;
 
 template <typename T>
-auto nil = in<OP<T>::template Left>(I{});
+auto nil = in<MP<T>::template Left>(I{});
 
 template <typename T>
 auto snoc(SnocList<T> lst, T t) -> SnocList<T> {
-  return in<OP<T>::template Left>(
-      std::make_pair(std::make_shared<SnocList<T>>(lst), t));
-}
-
-template <typename T, typename U>
-constexpr bool has_pair(S<I, P<T, U>> const &i_or_val) {
-  return i_or_val.index() == 1;
+  return in<MP<T>::template Left>(
+      P{std::make_shared<SnocList<T>>(lst), t});
 }
 
 template <typename Lst, typename T = list_element_type<Lst>>
@@ -1451,7 +1411,7 @@ auto to_vector(const Lst lst)
 template <typename T>
 auto to_snoclist(const std::vector<T> &vec) -> SnocList<T> {
 
-  SnocList<T> accumulator = in<OP<T>::template Left>(I{});
+  SnocList<T> accumulator = in<MP<T>::template Left>(I{});
 
   for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
     accumulator = snoc(accumulator, *it);
@@ -1486,7 +1446,7 @@ template <typename T>
 struct SnocF {
 
   template <typename U>
-  using Of = typename OP<T>::template Left<U>;
+  using Of = typename MP<T>::template Left<U>;
 
   template <typename Fn>
   static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
@@ -1495,8 +1455,7 @@ struct SnocF {
         auto [left, right] = std::get<1>(i_or_p);
         auto result = fn(*left);
         using result_t = decltype(result);
-        return std::make_pair(
-            std::make_shared<result_t>(result), right);
+        return P{std::make_shared<result_t>(result), right};
       } else {
         return I{};
       }
@@ -1504,7 +1463,7 @@ struct SnocF {
   }
 
   template <typename Carrier>
-  using Alg = Hom<typename OP<T>::template Left<Carrier>, Carrier>;
+  using Alg = Hom<typename MP<T>::template Left<Carrier>, Carrier>;
 
   template <typename Carrier>
   static auto cata(Alg<Carrier> alg) -> Hom<SnocList<T>, Carrier> {
