@@ -696,13 +696,12 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp-exponential}$") {
   REQUIRE(cw(ab) == k(ab));
 }
 
-template <typename Fn>
-auto puncurry(Fn fn) {
-  using T = Dom<Fn>;
-  using UtoV = Cod<Fn>;
-  using U = Dom<UtoV>;
-  using V = Cod<UtoV>;
-
+// clang-format on
+template <typename Fn,             typename T = Dom<Fn>,
+          typename UtoV = Cod<Fn>, typename U = Dom<UtoV>,
+                                   typename V = Cod<UtoV>>
+// clang-format off
+auto puncurry(Fn fn) -> Hom<P<T, U>, V> {
   return [fn](std::pair<T, U> p) -> V {
     return fn(p.first)(p.second);
   };
