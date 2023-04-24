@@ -1,5 +1,4 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
-#include <bits/utility.h>
 #include <catch2/catch.hpp>
 #include <cctype>
 #include <optional>
@@ -371,7 +370,7 @@ TEST_CASE("P (via prod) is functorial in both factors.") {
 struct Pair {
 
   template <typename T, typename U>
-  using Of = std::pair<T, U>;
+  using Of = P<T, U>;
 
   template <typename Fn, typename Gn>
   static auto bimap(Fn f, Gn g)
@@ -424,7 +423,7 @@ auto fanout(Fn fn, Gn gn) -> Hom<T, P<X, Y>> {
     static_assert(std::is_invocable_v<Fn, decltype(t)>);
     static_assert(std::is_invocable_v<Gn, decltype(t)>);
 
-    return std::pair{fn(t), gn(t)};
+    return P<X, Y>{fn(t), gn(t)};
   };
 }
 
@@ -491,7 +490,7 @@ TEST_CASE(
   REQUIRE(associator_rv_fd(ab_c) == id<P<P<A, B>, C>>(ab_c));
 }
 
-TEST_CASE("Associator diagram for std::pair") {
+TEST_CASE("Associator diagram for P") {
   auto start = P<A, P<B, P<C, D>>>{};
 
   // clang-format off
@@ -671,12 +670,15 @@ auto ev(P<Hom<T, U>, T> fn_and_arg) {
   return fn(x);
 }
 
+// clang-format off
 template <typename Fn, typename TU = Dom<Fn>,
-    typename T = std::tuple_element_t<0, TU>,
-    typename U = std::tuple_element_t<1, TU>, typename V = Cod<Fn>>
+          typename T = std::tuple_element_t<0, TU>,
+          typename U = std::tuple_element_t<1, TU>,
+          typename V = Cod<Fn>>
+// clang-format on
 auto pcurry(Fn fn) -> Hom<T, Hom<U, V>> {
   return [fn](T t) -> Hom<U, V> {
-    return [fn, t](U u) -> V { return fn(std::pair{t, u}); };
+    return [fn, t](U u) -> V { return fn(P<T, U>{t, u}); };
   };
 }
 
@@ -697,9 +699,7 @@ template <typename Fn,             typename T = Dom<Fn>,
                                    typename V = Cod<UtoV>>
 // clang-format on
 auto puncurry(Fn fn) -> Hom<P<T, U>, V> {
-  return [fn](std::pair<T, U> p) -> V {
-    return fn(p.first)(p.second);
-  };
+  return [fn](P<T, U> p) -> V { return fn(p.first)(p.second); };
 }
 
 TEST_CASE("pcurry and puncurry are inverse") {
