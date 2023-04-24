@@ -1,4 +1,4 @@
-// S<P<T, X>, P<U, X>o vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+// vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 #include <bits/utility.h>
 #include <catch2/catch.hpp>
 #include <cctype>
@@ -746,6 +746,9 @@ template <typename T, typename U>
 struct S : std::variant<T, U> {
   using std::variant<T, U>::variant;
 
+  using alt0_t = T;
+  using alt1_t = U;
+
   S() = delete;
 };
 
@@ -1357,6 +1360,8 @@ template <typename T>
 struct OP {
   template <typename U>
   using Left = S<I, P<std::shared_ptr<U>, T>>;
+
+  using Right = T; // not really usable.
 };
 
 template <typename T>
@@ -1503,21 +1508,24 @@ struct SnocF {
 };
 
 auto sum_alg = [](auto op) -> int {
-  if (has_pair(op)) {
-    auto [l, r] = std::get<1>(op);
-    return *l + r;
-  } else {
-    return 0;
-  }
+  auto global_0 = [](I) -> int { return 0; };
+
+  auto sum_pair = [](P<std::shared_ptr<int>, int> p) -> int {
+    return *proj_l(p) + proj_r(p);
+  };
+
+  return fanin(global_0, sum_pair)(op);
 };
 
 auto len_alg = [](auto op) -> int {
-  if (has_pair(op)) {
-    auto [l, r] = std::get<1>(op);
-    return *l + 1;
-  } else {
-    return 0;
-  }
+  using T = typename decltype(op)::alt1_t::second_type;
+
+  auto global_0 = [](I) -> int { return 0; };
+  auto add_one = [](P<std::shared_ptr<int>, T> p) -> int {
+    return *proj_l(p) + 1;
+  };
+
+  return fanin(global_0, add_one)(op);
 };
 
 TEST_CASE(
