@@ -675,11 +675,6 @@ template <typename Fn, typename TU = Dom<Fn>,
     typename T = std::tuple_element_t<0, TU>,
     typename U = std::tuple_element_t<1, TU>, typename V = Cod<Fn>>
 auto pcurry(Fn fn) -> Hom<T, Hom<U, V>> {
-  // using TU = Dom<Fn>;
-  // using T = std::tuple_element_t<0, TU>;
-  // using U = std::tuple_element_t<1, TU>;
-  // using V = Cod<Fn>;
-
   return [fn](T t) -> Hom<U, V> {
     return [fn, t](U u) -> V { return fn(std::pair{t, u}); };
   };
@@ -696,11 +691,11 @@ TEST_CASE("Commutativity of $\\eqref{cd:cpp-exponential}$") {
   REQUIRE(cw(ab) == k(ab));
 }
 
-// clang-format on
+// clang-format off
 template <typename Fn,             typename T = Dom<Fn>,
           typename UtoV = Cod<Fn>, typename U = Dom<UtoV>,
                                    typename V = Cod<UtoV>>
-// clang-format off
+// clang-format on
 auto puncurry(Fn fn) -> Hom<P<T, U>, V> {
   return [fn](std::pair<T, U> p) -> V {
     return fn(p.first)(p.second);
@@ -745,11 +740,24 @@ template <typename T, typename U>
 struct S : std::variant<T, U> {
   using std::variant<T, U>::variant;
 
-  using alt0_t = T;
-  using alt1_t = U;
-
   S() = delete;
 };
+
+template <std::size_t N, typename S>
+struct sum_term;
+
+template <typename T, typename U>
+struct sum_term<0, S<T, U>> {
+  using type = T;
+};
+
+template <typename T, typename U>
+struct sum_term<1, S<T, U>> {
+  using type = U;
+};
+
+template <std::size_t N, typename S>
+using sum_term_t = typename sum_term<N, S>::type;
 
 struct Never { // Monoidal unit for S
   Never() = delete;
@@ -1514,13 +1522,18 @@ auto sum_alg = [](auto op) -> int {
   };
 
   return fanin(global_0, sum_pair)(op);
+  //     \______________________/
+  //    $\vec{0} ▽ \ttName{sum\_pair}$
 };
 
 auto len_alg = [](auto op) -> int {
-  using T = typename decltype(op)::alt1_t::second_type;
+  // We don not care about the list-element type, so we deduce it:
+  using ElemT = typename sum_term_t<1, decltype(op)>::second_type;
+  //                     \_________________________/  \_________/
+  //                          Pair term in sum        right-factor
 
   auto global_0 = [](I) -> int { return 0; };
-  auto add_one = [](P<std::shared_ptr<int>, T> p) -> int {
+  auto add_one = [](P<std::shared_ptr<int>, ElemT> p) -> int {
     return *proj_l(p) + 1;
   };
 
