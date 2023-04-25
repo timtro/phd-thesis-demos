@@ -293,6 +293,41 @@ TEST_CASE("Functor axioms of Const<A>.") {
 }
 
 // ........................................................ f]]]2
+// shared_ptr functor ..................................... f[[[2
+namespace sptr {
+  template <typename T>
+  using Of = std::shared_ptr<T>;
+
+  template <typename Fn>
+  auto olmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+    return [fn](Of<Dom<Fn>> x_ptr) -> Of<Cod<Fn>> {
+      const auto result = fn(*x_ptr);
+      using Result = std::remove_cv_t<decltype(result)>;
+
+      return std::make_shared<Result>(result);
+    };
+  }
+} // namespace sptr
+
+TEST_CASE("ptr is functorial 'up to natural transformation'") {
+  auto a_ptr = std::make_shared<A>();
+
+  // clang-format off
+  REQUIRE(
+    *(compose(sptr::olmap(g), sptr::olmap(f))(a_ptr))
+        ==
+            *(sptr::olmap(compose(g, f))(a_ptr))
+  );
+  // clang-format on
+
+  REQUIRE(
+      *(sptr::olmap(id<A>)(a_ptr)) == *(id<sptr::Of<A>>(a_ptr)));
+
+  // Note that we have to dereference for the test.
+  // This is not a functor without
+}
+
+// ........................................................ f]]]2
 // Natural Transformations ................................ f[[[2
 
 template <typename T>
@@ -515,8 +550,7 @@ TEST_CASE("Associator diagram for P") {
 // ........................................................ f]]]3
 // Product Unitor ......................................... f[[[3
 
-// unit-type is any singleton.
-struct I {
+struct I { // monoidal unit for P
   bool operator==(const I) const { return true; }
 };
 
@@ -1331,18 +1365,23 @@ struct MP {
   using Right = T; // not really usable.
 };
 
+// Helpers ................................................ f[[[4
+template <typename T>
+using maybe_pair_element_t = typename sum_term_t<1, T>::second_type;
+
+template <typename Lst>
+using snoclist_element_type = typename std::remove_reference<
+    decltype(std::get<1>(out(std::declval<Lst>())))>::type::
+    second_type;
+
 template <typename T, typename U>
 constexpr bool has_pair(S<I, P<T, U>> const &i_or_val) {
   return i_or_val.index() == 1;
 }
+// ........................................................ f]]]4
 
 template <typename T>
 using SnocList = Mu<MP<T>::template Left>;
-
-template <typename Lst>
-using list_element_type = typename std::remove_reference<
-    decltype(std::get<1>(out(std::declval<Lst>())))>::type::
-    second_type;
 
 template <typename T>
 auto nil = in<MP<T>::template Left>(I{});
@@ -1353,7 +1392,7 @@ auto snoc(SnocList<T> lst, T t) -> SnocList<T> {
       P{std::make_shared<SnocList<T>>(lst), t});
 }
 
-template <typename Lst, typename T = list_element_type<Lst>>
+template <typename Lst, typename T = snoclist_element_type<Lst>>
 auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
   auto l = out(lhs);
   auto r = out(rhs);
@@ -1380,8 +1419,8 @@ TEST_CASE("Building `List`s") {
       snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
 
   REQUIRE(std::is_same_v<SnocList<int>, decltype(list_ints)>);
-  REQUIRE(
-      std::is_same_v<list_element_type<decltype(list_ints)>, int>);
+  REQUIRE(std::is_same_v<snoclist_element_type<decltype(list_ints)>,
+      int>);
 
   REQUIRE(list_ints == list_ints);
   // NB: require_FALSE:
@@ -1391,8 +1430,8 @@ TEST_CASE("Building `List`s") {
 // Isomorphism between List and std::vector ............... f[[[3
 template <typename Lst>
 auto to_vector(const Lst lst)
-    -> std::vector<list_element_type<Lst>> {
-  using T = list_element_type<Lst>;
+    -> std::vector<snoclist_element_type<Lst>> {
+  using T = snoclist_element_type<Lst>;
   static_assert(std::is_same_v<Lst, SnocList<T>>);
 
   std::vector<T> output;
@@ -1451,19 +1490,9 @@ struct SnocF {
   template <typename Fn>
   static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return [fn](Of<Dom<Fn>> i_or_p) -> Of<Cod<Fn>> {
+      using Elem = maybe_pair_element_t<Of<Dom<Fn>>>;
 
-      using P_t = sum_term_t<1, decltype(i_or_p)>;
-
-      const auto lift_left = [&fn](P_t p) {
-        auto [left, right] = p;
-        auto result = fn(*left);
-        using result_t = decltype(result);
-        return P{std::make_shared<result_t>(result), right};
-      };
-
-      return coprod(id<I>, lift_left)(i_or_p);
-      //                       ↑
-      //        Would be prod(fn, id) but for shared_ptr.
+      return coprod(id<I>, prod(sptr::olmap(fn), id<Elem>))(i_or_p);
     };
   }
 
@@ -1473,7 +1502,7 @@ struct SnocF {
   template <typename Carrier>
   static auto cata(Alg<Carrier> alg) -> Hom<SnocList<T>, Carrier> {
     return [alg](SnocList<T> ts) {
-      return alg(SnocF<T>::fmap(cata<Carrier>(alg))(out(ts)));
+      return alg(fmap(cata<Carrier>(alg))(out(ts)));
     };
   }
 };
@@ -1492,9 +1521,7 @@ auto sum_alg = [](auto op) -> int {
 
 auto len_alg = [](auto op) -> int {
   // We don not care about the list-element type, so we deduce it:
-  using ElemT = typename sum_term_t<1, decltype(op)>::second_type;
-  //                     \_________________________/  \_________/
-  //                          Pair term in sum        right-factor
+  using ElemT = maybe_pair_element_t<decltype(op)>;
 
   auto global_0 = [](I) -> int { return 0; };
   auto add_one = [](P<std::shared_ptr<int>, ElemT> p) -> int {
