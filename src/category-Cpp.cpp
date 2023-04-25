@@ -1451,14 +1451,19 @@ struct SnocF {
   template <typename Fn>
   static auto fmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return [fn](Of<Dom<Fn>> i_or_p) -> Of<Cod<Fn>> {
-      if (has_pair(i_or_p)) {
-        auto [left, right] = std::get<1>(i_or_p);
+
+      using P_t = sum_term_t<1, decltype(i_or_p)>;
+
+      const auto lift_left = [&fn](P_t p) {
+        auto [left, right] = p;
         auto result = fn(*left);
         using result_t = decltype(result);
         return P{std::make_shared<result_t>(result), right};
-      } else {
-        return I{};
-      }
+      };
+
+      return coprod(id<I>, lift_left)(i_or_p);
+      //                       ↑
+      //        Would be prod(fn, id) but for shared_ptr.
     };
   }
 
