@@ -299,7 +299,7 @@ namespace sptr {
   using Of = std::shared_ptr<T>;
 
   template <typename Fn>
-  auto olmap(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
+  auto map(Fn fn) -> Hom<Of<Dom<Fn>>, Of<Cod<Fn>>> {
     return [fn](Of<Dom<Fn>> x_ptr) -> Of<Cod<Fn>> {
       const auto result = fn(*x_ptr);
       using Result = std::remove_cv_t<decltype(result)>;
@@ -314,14 +314,15 @@ TEST_CASE("ptr is functorial 'up to natural transformation'") {
 
   // clang-format off
   REQUIRE(
-    *(compose(sptr::olmap(g), sptr::olmap(f))(a_ptr))
+    *compose(sptr::map(g), sptr::map(f))(a_ptr)
         ==
-            *(sptr::olmap(compose(g, f))(a_ptr))
+            *sptr::map(compose(g, f))(a_ptr)
   );
   // clang-format on
 
-  REQUIRE(
-      *(sptr::olmap(id<A>)(a_ptr)) == *(id<sptr::Of<A>>(a_ptr)));
+  REQUIRE(*sptr::map(id<A>)(a_ptr) == *id<sptr::Of<A>>(a_ptr));
+
+  REQUIRE(id<sptr::Of<A>>(a_ptr) == a_ptr);
 
   // Note that we have to dereference for the test.
   // This is not a functor without
@@ -1492,7 +1493,7 @@ struct SnocF {
     return [fn](Of<Dom<Fn>> i_or_p) -> Of<Cod<Fn>> {
       using Elem = maybe_pair_element_t<Of<Dom<Fn>>>;
 
-      return coprod(id<I>, prod(sptr::olmap(fn), id<Elem>))(i_or_p);
+      return coprod(id<I>, prod(sptr::map(fn), id<Elem>))(i_or_p);
     };
   }
 
