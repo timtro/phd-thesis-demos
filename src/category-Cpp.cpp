@@ -1520,6 +1520,15 @@ auto sum_alg = [](auto op) -> int {
   //    $\vec{0} ▽ \ttName{sum\_pair}$
 };
 
+TEST_CASE("sum algebra on integer lists is as expected") {
+
+  auto list_ints = snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
+  auto sum_int_list = SnocF<int>::cata<int>(sum_alg);
+
+  REQUIRE(sum_int_list(list_ints) == 1 + 2 + 3 + 4);
+}
+
+
 auto len_alg = [](auto op) -> int {
   // We don not care about the list-element type, so we deduce it:
   using ElemT = maybe_pair_element_t<decltype(op)>;
@@ -1532,23 +1541,21 @@ auto len_alg = [](auto op) -> int {
   return fanin(global_0, add_one)(op);
 };
 
-TEST_CASE(
-    "Testing catamorphisms with sum algebra on integer "
-    "lists, and length algebras on integer- and "
-    "A-lists") {
-  auto list_ints = snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
+TEST_CASE("len_alg-catamorphism is as expected…") {
 
-  auto sum_int_list = SnocF<int>::cata<int>(sum_alg);
-  auto sum = sum_int_list(list_ints);
-  REQUIRE(sum == 1 + 2 + 3 + 4);
+  SECTION("… on an integer list") {
+    auto list_ints = snoc(snoc(snoc(snoc(nil<int>, 1), 2), 3), 4);
+    auto len_int_list = SnocF<int>::cata<int>(len_alg);
 
-  auto len_int_list = SnocF<int>::cata<int>(len_alg);
-  auto len = len_int_list(list_ints);
-  REQUIRE(len == 4);
+    REQUIRE(len_int_list(list_ints) == 4);
+  }
 
-  auto list_as = snoc(snoc(nil<A>, A{}), A{});
-  auto len_a_list = SnocF<A>::cata<int>(len_alg);
-  REQUIRE(len_a_list(list_as) == 2);
+  SECTION("… on an A-list") {
+    auto list_as = snoc(snoc(nil<A>, A{}), A{});
+    auto len_a_list = SnocF<A>::cata<int>(len_alg);
+
+    REQUIRE(len_a_list(list_as) == 2);
+  }
 }
 
 // ........................................................ f]]]3
