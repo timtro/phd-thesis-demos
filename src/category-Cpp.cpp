@@ -803,6 +803,8 @@ using sum_term_t = typename sum_term<N, S>::type;
 struct Never { // Monoidal unit for S
   Never() = delete;
   Never(const Never &) = delete;
+  virtual ~Never() = delete;
+
   bool operator==(const Never &) const {
     throw std::domain_error(
         "`Never` instances should not exist, "
