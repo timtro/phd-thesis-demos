@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.9.1)
 project(mealy-control-demo)
 
-set(CMAKE_CXX_FLAGS "-Wall -pedantic -O3")
+set(CMAKE_CXX_FLAGS "-Wall -pedantic -O3 -ftemplate-backtrace-limit=0")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
