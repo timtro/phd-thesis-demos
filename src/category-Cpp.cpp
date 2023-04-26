@@ -27,6 +27,11 @@ using tst::g; // g : B → C
 using tst::h; // h : C → D
 // using tst::id;
 
+// For convenience with functions of std::function type,
+//   wrap tf::id in a std::function.
+template <typename T>
+auto id = Hom<T, T>{tf::id<T>};
+
 // tfunc test cases ....................................... f[[[1
 TEST_CASE(
     "Polymorphic identity function should perfectly "
@@ -51,11 +56,6 @@ TEST_CASE(
         decltype(tf::id(std::declval<int &&>()))>::value);
   }
 }
-
-// For convenience with functions of std::function type,
-//   wrap tf::id in a std::function.
-template <typename T>
-auto id = Hom<T, T>{tf::id<T>};
 
 TEST_CASE("compose(f) == f ∘ id_A == id_B ∘ f.", //
     "[compose], [mathematical]") {
@@ -249,8 +249,12 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
   //                 $↓$
   auto a_s = Vector::Of<A>{A{}, A{}, A{}};
 
-  REQUIRE(compose(Vector::fmap(g), Vector::fmap(f))(a_s) ==
-          Vector::fmap(compose(g, f))(a_s));
+  // clang-format off
+  REQUIRE(
+    compose(Vector::fmap(g), Vector::fmap(f))(a_s)
+        ==
+            Vector::fmap(compose(g, f))(a_s));
+  // clang-format on
 
   REQUIRE(Vector::fmap(id<A>)(a_s) == id<Vector::Of<A>>(a_s));
 }
@@ -803,7 +807,7 @@ using sum_term_t = typename sum_term<N, S>::type;
 struct Never { // Monoidal unit for S
   Never() = delete;
   Never(const Never &) = delete;
-  virtual ~Never() = delete;
+  virtual ~Never();
 
   bool operator==(const Never &) const {
     throw std::domain_error(
