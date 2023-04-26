@@ -1504,6 +1504,9 @@ struct SnocF {
   static auto cata(Alg<Carrier> alg) -> Hom<SnocList<T>, Carrier> {
     return [alg](SnocList<T> ts) {
       return alg(fmap(cata<Carrier>(alg))(out(ts)));
+      // clang-format off
+      //     alg   $∘$   $\Ffmap{\ttF}(\catam{\ttVar{alg}})$   $∘$  out
+      // clang-format on
     };
   }
 };
