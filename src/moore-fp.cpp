@@ -11,6 +11,8 @@
 #include <range/v3/view/transform.hpp>
 #include <rxcpp/rx.hpp>
 
+#include "Cpp-BiCCC.hpp"
+
 namespace rx {
   using namespace rxcpp;
   using namespace rxcpp::operators;
@@ -22,12 +24,6 @@ namespace rx {
 
 #include "Cpp-arrows.hpp"
 
-using tf::compose;
-using tf::curry;
-using tf::Doms;
-using tf::Hom;
-using tf::id;
-
 using State = int;
 using Output = int;
 using Input = int;
@@ -37,7 +33,7 @@ template <typename I, typename S, typename O>
 struct MooreMachine {
   S s0;
   Hom<Doms<S, I>, S> tmap; // $S × I → S$
-  Hom<S, O> rmap;         // $S → O$
+  Hom<S, O> rmap;          // $S → O$
 };
 // ........................................................ f]]]1
 // Moore Coalgebra ........................................ f[[[1
