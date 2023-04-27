@@ -265,14 +265,14 @@ TEST_CASE("Check the functor laws for Vector::fmap") {
 template <typename T>
 struct Always {
   template <typename>
-  using given = T;
+  using Given = T;
 };
 
 template <typename T>
 struct Const {
 
   template <typename U>
-  using Of = typename Always<T>::template given<U>;
+  using Of = typename Always<T>::template Given<U>;
 
   template <typename Fn>
   static auto fmap(Fn) -> Hom<T, T> {
@@ -324,9 +324,9 @@ TEST_CASE("ptr is functorial 'up to natural transformation'") {
   );
   // clang-format on
 
-  REQUIRE(*sptr::map(id<A>)(a_ptr) == *id<sptr::Of<A>>(a_ptr));
-
   REQUIRE(id<sptr::Of<A>>(a_ptr) == a_ptr);
+
+  REQUIRE(*sptr::map(id<A>)(a_ptr) == *id<sptr::Of<A>>(a_ptr));
 
   // Note that we have to dereference for the test.
   // This is not a functor without
@@ -397,6 +397,21 @@ template <typename Fn,          typename Gn,
           typename T = Dom<Fn>, typename U = Dom<Gn>,
           typename X = Cod<Fn>, typename Y = Cod<Gn>>
 // clang-format on
+auto fanout(Fn fn, Gn gn) -> Hom<T, P<X, Y>> {
+  static_assert(std::is_same_v<T, U>);
+  return [fn, gn](auto t) -> P<X, Y> {
+    static_assert(std::is_invocable_v<Fn, decltype(t)>);
+    static_assert(std::is_invocable_v<Gn, decltype(t)>);
+
+    return {fn(t), gn(t)};
+  };
+}
+
+// clang-format off
+template <typename Fn,          typename Gn,
+          typename T = Dom<Fn>, typename U = Dom<Gn>,
+          typename X = Cod<Fn>, typename Y = Cod<Gn>>
+// clang-format on
 auto prod(Fn fn, Gn gn) -> Hom<P<T, U>, P<X, Y>> {
   return [fn, gn](P<T, U> tu) -> P<X, Y> {
     auto [t, u] = tu;
@@ -453,21 +468,6 @@ TEST_CASE("Pair is functorial in the left position.") {
   // clang-format on
 
   REQUIRE(Pair::bimap(id<A>, id<B>)(ab) == id<P<A, B>>(ab));
-}
-
-// clang-format off
-template <typename Fn,          typename Gn,
-          typename T = Dom<Fn>, typename U = Dom<Gn>,
-          typename X = Cod<Fn>, typename Y = Cod<Gn>>
-// clang-format on
-auto fanout(Fn fn, Gn gn) -> Hom<T, P<X, Y>> {
-  static_assert(std::is_same_v<T, U>);
-  return [fn, gn](auto t) -> P<X, Y> {
-    static_assert(std::is_invocable_v<Fn, decltype(t)>);
-    static_assert(std::is_invocable_v<Gn, decltype(t)>);
-
-    return {fn(t), gn(t)};
-  };
 }
 
 TEST_CASE("Coherence of $\\eqref{cd:cpp:binary-product}$") {
@@ -602,7 +602,7 @@ TEST_CASE("_fw and _rv are mutual inverses for L-/R-unitor") {
   );
   // clang-format on
 }
-
+// TEST_CASE("Commutativity of the Unitor diagram, $\eqref{cd:cpp-unitor}$.") {
 TEST_CASE("Unitor diagram") {
   auto a_ib = P<A, P<I, B>>{};
 
@@ -630,6 +630,7 @@ TEST_CASE("Braiding is self-inverse") {
   REQUIRE(braid(braid(ab)) == id<P<A, B>>(ab));
 }
 
+// TEST_CASE("Braiding diagram $\eqref{cd:cpp-braiding-1}$") {
 TEST_CASE("Braiding diagram 1") {
   auto ab_c = P<P<A, B>, C>{};
 
@@ -902,6 +903,7 @@ TEST_CASE(
               coprod(id<A>, compose(h, g))(x)
     );
     // clang-format on
+
     REQUIRE(coprod(id<A>, id<B>)(x) == id<S<A, B>>(x));
   }
 }
@@ -1096,6 +1098,7 @@ TEST_CASE("Associator diagram for coproduct") {
         coprod(id<A>, associator_co_fd<B, C, D>)
       );
   // clang-format on
+
   for (auto &each : start_vals)
     REQUIRE(ccw_path(each) == cw_path(each));
 };
@@ -1145,7 +1148,7 @@ auto r_unitor_co_rv(T t) -> S<T, Never> {
   return inject_l<T, Never>(t);
 }
 
-TEST_CASE("_fw and _rv are mutual inverses for L-/R-counitor") {
+TEST_CASE("_fw and _rv are mutual inverses for l/r-unitor") {
   auto ra = inject_r<Never, A>(A{});
   auto la = inject_l<A, Never>(A{});
 
