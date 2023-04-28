@@ -11,8 +11,6 @@
 #include <range/v3/view/transform.hpp>
 #include <rxcpp/rx.hpp>
 
-#include "Cpp-BiCCC.hpp"
-
 namespace rx {
   using namespace rxcpp;
   using namespace rxcpp::operators;
@@ -22,20 +20,15 @@ namespace rx {
 
 #include <catch2/catch.hpp>
 
-#include "Cpp-arrows.hpp"
+#include "moore.hpp"
 
-using State = int;
-using Output = int;
-using Input = int;
+using moore::MooreMachine;
+using moore::moore_to_coalgebra;
 
-// Classical Moore Machine ................................ f[[[1
-template <typename I, typename S, typename O>
-struct MooreMachine {
-  S s0;
-  Hom<Doms<S, I>, S> tmap; // $S × I → S$
-  Hom<S, O> rmap;          // $S → O$
-};
-// ........................................................ f]]]1
+using State = moore::State;   // int
+using Output = moore::Output; // int
+using Input = moore::Input;   // int
+
 // Moore Coalgebra ........................................ f[[[1
 
 // M<S> = $(I ⊸ S, O)$
@@ -297,6 +290,31 @@ TEST_CASE(
       auto running_sumer = make_cata(scanify(alg));
       REQUIRE(running_sumer(i_s) == running_sum);
     }
+  }
+
+  AND_GIVEN("Playground.") {
+    auto alg = moore_to_snoc_algebra(mm);
+    auto phi = compose(mm.rmap, SnocF<Input>::cata<State>(alg));
+
+    auto total =
+        mm.rmap(std::accumulate(cbegin(i_s), cend(i_s), 0));
+
+    auto snoc_is = to_snoclist(i_s);
+
+    THEN("phi applied to an empty list should produce the "
+         "initial state.") {
+      REQUIRE(phi(nil<Input>) == mm.rmap(mm.s0));
+    }
+
+    THEN("phi applied to i_s should produce its sum total.") {
+      REQUIRE(phi(snoc_is) == total);
+    }
+
+    // THEN("The scanified version of that algebra should produce "
+    //      "a list (i.e., std::vector) of the running sum.") {
+    //   auto running_sumer = SnocF<SnocList<Input>>::cata<State>(scanify<State, Input>(alg));
+    //   REQUIRE(running_sumer(snoc_is) == running_sum);
+    // }
   }
 
   AND_GIVEN("an implementation of $ᵠ \\⦂ I^* → O$ in RxCpp") {
