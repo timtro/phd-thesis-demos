@@ -382,13 +382,13 @@ TEST_CASE("Associator diagram for P") {
 // Product Unitor ......................................... f[[[3
 
 TEST_CASE("_fw and _rv are mutual inverses for L-/R-unitor") {
-  auto ia = P<I, A>{};
-  auto ai = P<A, I>{};
+  auto ia = P<PUnit, A>{};
+  auto ai = P<A, PUnit>{};
 
   // clang-format off
   REQUIRE(
       compose(l_unitor_rv<A>, l_unitor_fw<A>)(ia) ==
-          id<P<I, A>>(ia)
+          id<P<PUnit, A>>(ia)
   );
   REQUIRE(
       compose(l_unitor_fw<A>, l_unitor_rv<A>)(A{}) ==
@@ -397,7 +397,7 @@ TEST_CASE("_fw and _rv are mutual inverses for L-/R-unitor") {
 
   REQUIRE(
       compose(r_unitor_rv<A>, r_unitor_fw<A>)(ai) ==
-          id<P<A, I>>(ai)
+          id<P<A, PUnit>>(ai)
   );
   REQUIRE(compose(r_unitor_fw<A>, r_unitor_rv<A>)(A{}) == 
           id<A>(A{})
@@ -406,12 +406,12 @@ TEST_CASE("_fw and _rv are mutual inverses for L-/R-unitor") {
 }
 // TEST_CASE("Commutativity of the Unitor diagram, $\eqref{cd:cpp-unitor}$.") {
 TEST_CASE("Unitor diagram") {
-  auto a_ib = P<A, P<I, B>>{};
+  auto a_ib = P<A, P<PUnit, B>>{};
 
   // clang-format off
   auto cw_path = compose(
         prod(r_unitor_fw<A>, id<B>),
-        associator_fd<A, I, B>
+        associator_fd<A, PUnit, B>
       );
   auto ccw_path = prod(id<A>, l_unitor_fw<B>);
   // clang-format on
@@ -886,7 +886,7 @@ TEST_CASE(
 // List<T>-catamorphisms .................................. f[[[3
 
 auto sum_alg = [](auto op) -> int {
-  auto global_0 = [](I) -> int { return 0; };
+  auto global_0 = [](PUnit) -> int { return 0; };
 
   auto sum_pair = [](P<std::shared_ptr<int>, int> p) -> int {
     return *proj_l(p) + proj_r(p);
@@ -905,12 +905,11 @@ TEST_CASE("sum algebra on integer lists is as expected") {
   REQUIRE(sum_int_list(list_ints) == 1 + 2 + 3 + 4);
 }
 
-
 auto len_alg = [](auto op) -> int {
   // We don not care about the list-element type, so we deduce it:
   using ElemT = maybe_pair_element_t<decltype(op)>;
 
-  auto global_0 = [](I) -> int { return 0; };
+  auto global_0 = [](PUnit) -> int { return 0; };
   auto add_one = [](P<std::shared_ptr<int>, ElemT> p) -> int {
     return *proj_l(p) + 1;
   };

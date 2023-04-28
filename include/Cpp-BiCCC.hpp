@@ -1,6 +1,7 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
+#pragma once
+
 #include <catch2/catch.hpp>
-#include <cctype>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
@@ -223,28 +224,28 @@ auto associator_rv(P<P<T, U>, V> tu_v) -> P<T, P<U, V>> {
 // ........................................................ f]]]3
 // Product Unitor ......................................... f[[[3
 
-struct I { // monoidal unit for P
-  bool operator==(const I) const { return true; }
+struct PUnit { // monoidal unit for P
+  bool operator==(const PUnit) const { return true; }
 };
 
 template <typename T>
-auto l_unitor_fw(P<I, T> it) -> T {
+auto l_unitor_fw(P<PUnit, T> it) -> T {
   return std::get<1>(it);
 }
 
 template <typename T>
-auto l_unitor_rv(T t) -> P<I, T> {
-  return {I{}, t};
+auto l_unitor_rv(T t) -> P<PUnit, T> {
+  return {PUnit{}, t};
 }
 
 template <typename T>
-auto r_unitor_fw(P<T, I> ti) -> T {
+auto r_unitor_fw(P<T, PUnit> ti) -> T {
   return std::get<0>(ti);
 }
 
 template <typename T>
-auto r_unitor_rv(T t) -> P<T, I> {
-  return {t, I{}};
+auto r_unitor_rv(T t) -> P<T, PUnit> {
+  return {t, PUnit{}};
 }
 
 // ........................................................ f]]]3
@@ -612,7 +613,7 @@ auto out(Mu<F> f) -> F<Mu<F>> {
 template <typename T>
 struct MP {
   template <typename U>
-  using Left = S<I, P<std::shared_ptr<U>, T>>;
+  using Left = S<PUnit, P<std::shared_ptr<U>, T>>;
 
   using Right = T; // not really usable.
 };
@@ -627,7 +628,7 @@ using snoclist_element_type = typename std::remove_reference<
     second_type;
 
 template <typename T, typename U>
-constexpr bool has_pair(S<I, P<T, U>> const &i_or_val) {
+constexpr bool has_pair(S<PUnit, P<T, U>> const &i_or_val) {
   return i_or_val.index() == 1;
 }
 // ........................................................ f]]]4
@@ -636,7 +637,7 @@ template <typename T>
 using SnocList = Mu<MP<T>::template Left>;
 
 template <typename T>
-auto nil = in<MP<T>::template Left>(I{});
+auto nil = in<MP<T>::template Left>(PUnit{});
 
 template <typename T>
 auto snoc(SnocList<T> lst, T t) -> SnocList<T> {
@@ -688,7 +689,7 @@ auto to_vector(const Lst lst)
 template <typename T>
 auto to_snoclist(const std::vector<T> &vec) -> SnocList<T> {
 
-  SnocList<T> accumulator = in<MP<T>::template Left>(I{});
+  SnocList<T> accumulator = in<MP<T>::template Left>(PUnit{});
 
   for (auto it = vec.cbegin(); it != vec.cend(); ++it) {
     accumulator = snoc(accumulator, *it);
@@ -711,7 +712,7 @@ struct SnocF {
     return [fn](Of<Dom<Fn>> i_or_p) -> Of<Cod<Fn>> {
       using Elem = maybe_pair_element_t<Of<Dom<Fn>>>;
 
-      return coprod(id<I>, prod(sptr::map(fn), id<Elem>))(i_or_p);
+      return coprod(id<PUnit>, prod(sptr::map(fn), id<Elem>))(i_or_p);
     };
   }
 
@@ -728,6 +729,15 @@ struct SnocF {
     };
   }
 };
+
+template <typename T, typename Carrier>
+using SnocAlg = typename SnocF<T>::template Alg<Carrier>;
+
+template <typename T, typename Carrier>
+auto make_cata(SnocAlg<T, Carrier> &&alg) {
+  return SnocF<T>::template cata<Carrier>(
+      std::forward<decltype(alg)>(alg));
+}
 
 // ........................................................ f]]]3
 // ........................................................ f]]]2
