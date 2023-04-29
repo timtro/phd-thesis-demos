@@ -229,6 +229,10 @@ struct PUnit { // monoidal unit for P
   bool operator==(const PUnit) const { return true; }
 };
 
+std::ostream &operator<<(std::ostream &os, PUnit const &) {
+  return os << "PUnit";
+}
+
 template <typename T>
 auto l_unitor_fw(P<PUnit, T> it) -> T {
   return std::get<1>(it);
@@ -323,6 +327,16 @@ struct S : std::variant<T, U> {
 template <typename T, typename U>
 S(T, U) -> S<T, U>;
 
+template <typename T, typename U>
+auto inject_l(T t) -> S<T, U> {
+  return S<T, U>(std::in_place_index<0>, t);
+}
+
+template <typename T, typename U>
+auto inject_r(U t) -> S<T, U> {
+  return S<T, U>(std::in_place_index<1>, t);
+}
+
 template <std::size_t N, typename S>
 struct sum_term;
 
@@ -352,13 +366,21 @@ struct Never { // Monoidal unit for S
 };
 
 template <typename T, typename U>
-auto inject_l(T t) -> S<T, U> {
-  return S<T, U>(std::in_place_index<0>, t);
+auto operator<<(std::ostream &os, S<T, U> s) -> std::ostream & {
+  if (s.index() == 0)
+    return os << "( \"Term 0\", " << std::get<0>(s) << " )";
+  else
+    return os << "( \"Term 1\", " << std::get<1>(s) << " )";
 }
 
-template <typename T, typename U>
-auto inject_r(U t) -> S<T, U> {
-  return S<T, U>(std::in_place_index<1>, t);
+template <typename T>
+auto operator<<(std::ostream &os, S<T, Never> s) -> std::ostream & {
+  return os << "( \"Only 0\", " << std::get<0>(s) << " )";
+}
+
+template <typename U>
+auto operator<<(std::ostream &os, S<Never, U> s) -> std::ostream & {
+  return os << "( \"Only 1\", " << std::get<1>(s) << " )";
 }
 
 // clang-format off
@@ -671,20 +693,6 @@ auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
   return !has_pair(l) && !has_pair(r);
 }
 
-template <typename Lst, typename T = snoclist_element_type<Lst>>
-auto operator<<(std::ostream &os, Lst const &lst)
-    -> std::ostream & {
-  auto l = out(lst);
-
-  while (has_pair(l)) {
-    auto [tail, val] = std::get<1>(l);
-    os << val << " ";
-    l = *tail;
-  }
-
-  return os;
-}
-
 // ........................................................ f]]]3
 // Isomorphism between List and std::vector ............... f[[[3
 template <typename Lst>
@@ -716,6 +724,30 @@ auto to_snoclist(const std::vector<T> &vec) -> SnocList<T> {
   }
 
   return accumulator;
+}
+
+template <typename Lst, typename T = snoclist_element_type<Lst>>
+auto operator<<(std::ostream &os, Lst const &lst)
+    -> std::ostream & {
+
+  auto vec_lst = to_vector(lst);
+
+  os << "snoc[ ";
+  auto iter = vec_lst.cbegin();
+  auto end = vec_lst.cend();
+  if (iter != end) {
+    os << *iter;
+    while (++iter != end) {
+      os << ", " << *iter;
+    }
+  }
+
+  return os << " ]";
+}
+
+template <typename T, typename U>
+auto operator<<(std::ostream &os, P<T, U> p) -> std::ostream & {
+  return os << "( " << p.first << ", " << p.second << " )";
 }
 
 // ........................................................ f]]]3
