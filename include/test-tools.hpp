@@ -16,20 +16,16 @@ struct D {bool operator==(const D) const { return true; }};
 
   // A nicety so that Catch can print
   std::ostream &operator<<(std::ostream &os, A const &) {
-    os << "A";
-    return os;
+    return os << 'A';
   }
   std::ostream &operator<<(std::ostream &os, B const &) {
-    os << "B";
-    return os;
+    return os << 'B';
   }
   std::ostream &operator<<(std::ostream &os, C const &) {
-    os << "C";
-    return os;
+    return os << 'C';
   }
   std::ostream &operator<<(std::ostream &os, D const &) {
-    os << "D";
-    return os;
+    return os << 'D';
   }
 
   // f : A → B
