@@ -2,6 +2,7 @@
 #pragma once
 
 #include <catch2/catch.hpp>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
@@ -646,6 +647,11 @@ auto snoc(SnocList<T> lst, T t) -> SnocList<T> {
 }
 
 template <typename Lst, typename T = snoclist_element_type<Lst>>
+auto unsafe_head(Lst lst) -> T {
+  return std::get<1>(out(lst)).second;
+}
+
+template <typename Lst, typename T = snoclist_element_type<Lst>>
 auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
   auto l = out(lhs);
   auto r = out(rhs);
@@ -663,6 +669,20 @@ auto operator==(Lst const &lhs, Lst const &rhs) -> bool {
   // If one of l or r still hold a pair at this point, then lhs
   // and rhs are different lengths and are not equal.
   return !has_pair(l) && !has_pair(r);
+}
+
+template <typename Lst, typename T = snoclist_element_type<Lst>>
+auto operator<<(std::ostream &os, Lst const &lst)
+    -> std::ostream & {
+  auto l = out(lst);
+
+  while (has_pair(l)) {
+    auto [tail, val] = std::get<1>(l);
+    os << val << " ";
+    l = *tail;
+  }
+
+  return os;
 }
 
 // ........................................................ f]]]3
@@ -712,7 +732,8 @@ struct SnocF {
     return [fn](Of<Dom<Fn>> i_or_p) -> Of<Cod<Fn>> {
       using Elem = maybe_pair_element_t<Of<Dom<Fn>>>;
 
-      return coprod(id<PUnit>, prod(sptr::map(fn), id<Elem>))(i_or_p);
+      return coprod(id<PUnit>, prod(sptr::map(fn), id<Elem>))(
+          i_or_p);
     };
   }
 

@@ -33,17 +33,16 @@ namespace moore {
 
   template <typename I, typename S>
   auto snoc_scanify(SnocAlg<I, S> alg) -> SnocAlg<I, SnocList<S>> {
-    return [alg=alg](auto unit_or_p) -> SnocList<S> {
+    return [alg = alg](auto unit_or_p) -> SnocList<S> {
       auto global_snoc_s0 = [&alg](PUnit) {
         return snoc(nil<S>, alg(PUnit{}));
-        ;
       };
 
       auto accum_trans =
           [&alg](P<std::shared_ptr<SnocList<S>>, Input> p)
           -> SnocList<S> {
         auto [accum, val] = p;
-        const auto s0 = std::get<1>(out((*accum))).second;
+        const auto s0 = unsafe_head(*accum);
         return snoc(*accum, alg(P{std::make_shared<S>(s0), val}));
       };
       return fanin(global_snoc_s0, accum_trans)(unit_or_p);
