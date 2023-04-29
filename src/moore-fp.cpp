@@ -1,5 +1,6 @@
 // vim: fdm=marker:fdc=2:fmr=f[[[,f]]]:tw=65
 
+#include "Cpp-BiCCC.hpp"
 #include <functional>
 #include <iostream>
 #include <numeric> // for inclusive_scan
@@ -22,8 +23,9 @@ namespace rx {
 
 #include "moore.hpp"
 
-using moore::MooreMachine;
 using moore::moore_to_coalgebra;
+using moore::MooreMachine;
+using moore::snoc_scanify;
 
 using State = moore::State;   // int
 using Output = moore::Output; // int
@@ -43,8 +45,7 @@ using M = std::pair<Hom<Input, S>, Output>;
 template <typename A, typename B>
 auto M_map(Hom<A, B> f) -> Hom<M<A>, M<B>> {
   return [f](const M<A> ma) -> M<B> {
-    return {
-        [f, ma](auto x) { return f(ma.first(x)); }, ma.second};
+    return {[f, ma](auto x) { return f(ma.first(x)); }, ma.second};
   };
 }
 
@@ -53,11 +54,8 @@ template <typename S>
 using MCoalgebra = Hom<S, M<S>>;
 
 template <typename I, typename S, typename O>
-auto moore_to_coalgebra(MooreMachine<I, S, O> mm)
-    -> MCoalgebra<S> {
-  return [mm](S s) {
-    return M<S>{curry(mm.tmap)(s), mm.rmap(s)};
-  };
+auto moore_to_coalgebra(MooreMachine<I, S, O> mm) -> MCoalgebra<S> {
+  return [mm](S s) { return M<S>{curry(mm.tmap)(s), mm.rmap(s)}; };
 }
 
 // ........................................................ f]]]1
@@ -209,8 +207,7 @@ auto drop_last(std::vector<T> ts) -> std::vector<T> {
 }
 
 template <typename T>
-auto make_vector_observable(std::vector<T> v)
-    -> rx::observable<T> {
+auto make_vector_observable(std::vector<T> v) -> rx::observable<T> {
   return rx::observable<>::create<T>([=](rx::subscriber<T> s) {
     for (auto each : v) {
       s.on_next(each);
@@ -310,11 +307,12 @@ TEST_CASE(
       REQUIRE(phi(snoc_is) == total);
     }
 
-    // THEN("The scanified version of that algebra should produce "
-    //      "a list (i.e., std::vector) of the running sum.") {
-    //   auto running_sumer = SnocF<SnocList<Input>>::cata<State>(scanify<State, Input>(alg));
-    //   REQUIRE(running_sumer(snoc_is) == running_sum);
-    // }
+    THEN("The scanified version of that algebra should produce "
+         "a list (i.e., SnocList) of the running sum.") {
+      auto running_sumer = SnocF<Input>::cata<SnocList<State>>(
+          snoc_scanify<Input, State>(alg));
+      REQUIRE(running_sumer(snoc_is) == to_snoclist(running_sum));
+    }
   }
 
   AND_GIVEN("an implementation of $ᵠ \\⦂ I^* → O$ in RxCpp") {
@@ -338,8 +336,7 @@ TEST_CASE(
 
   AND_GIVEN("with rx_scnal") {
 
-    auto custom_moore_scan =
-        [&i_s, &mm]() -> std::vector<Output> {
+    auto custom_moore_scan = [&i_s, &mm]() -> std::vector<Output> {
       const auto [s0, f, r] = mm;
       auto oi = make_vector_observable(i_s);
 
@@ -359,8 +356,7 @@ TEST_CASE(
 
   AND_GIVEN("With rx_moore_machine") {
 
-    auto custom_moore_scan =
-        [&i_s, &mm]() -> std::vector<Output> {
+    auto custom_moore_scan = [&i_s, &mm]() -> std::vector<Output> {
       auto oi = make_vector_observable(i_s);
       auto oo = oi | rx_moore_machine(mm);
 
@@ -409,8 +405,7 @@ TEST_CASE(
 
       using namespace ranges;
       const auto u_s =
-          i_s | views::exclusive_scan(0, f) |
-          views::transform(r);
+          i_s | views::exclusive_scan(0, f) | views::transform(r);
 
       return std::vector(std::cbegin(u_s), std::cend(u_s));
     };
