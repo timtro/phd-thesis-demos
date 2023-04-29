@@ -730,19 +730,14 @@ template <typename Lst, typename T = snoclist_element_type<Lst>>
 auto operator<<(std::ostream &os, Lst const &lst)
     -> std::ostream & {
 
-  auto vec_lst = to_vector(lst);
+  auto outermost = out(lst);
 
-  os << "snoc[ ";
-  auto iter = vec_lst.cbegin();
-  auto end = vec_lst.cend();
-  if (iter != end) {
-    os << *iter;
-    while (++iter != end) {
-      os << ", " << *iter;
-    }
+  if (has_pair(outermost)) {
+    auto [tail, head] = std::get<1>(outermost);
+    return os << "(snoc " << *tail << " " << head << " )";
+  } else {
+    return os << "nil";
   }
-
-  return os << " ]";
 }
 
 template <typename T, typename U>
