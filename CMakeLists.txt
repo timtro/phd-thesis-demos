@@ -36,6 +36,15 @@ add_executable(maybe-optional-functor src/maybe-optional-functor.cpp)
 target_link_libraries(maybe-optional-functor CATCH)
 target_include_directories(maybe-optional-functor PUBLIC include)
 
+find_package(Boost REQUIRED)
+include_directories(${Boost_INCLUDE_DIRS})
+
+add_executable(pid-example src/pid-example.cpp)
+target_link_libraries(pid-example CATCH)
+target_include_directories(pid-example PUBLIC include)
+target_link_libraries(pid-example "-lboost_iostreams" "-lboost_system" "-lboost_filesystem")
+
+
 # add_executable(filename src/filename.cpp)
 # target_link_libraries(filename CATCH)
 # target_include_directories(filename PUBLIC include)
