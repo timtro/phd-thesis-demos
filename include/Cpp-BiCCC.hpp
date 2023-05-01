@@ -192,7 +192,6 @@ auto prod(Fn fn, Gn gn) -> Hom<P<T, U>, P<X, Y>> {
 }
 
 struct Pair {
-
   template <typename T, typename U>
   using Of = P<T, U>;
 
@@ -368,19 +367,19 @@ struct Never { // Monoidal unit for S
 template <typename T, typename U>
 auto operator<<(std::ostream &os, S<T, U> s) -> std::ostream & {
   if (s.index() == 0)
-    return os << "( \"Term 0\", " << std::get<0>(s) << " )";
+    return os << "( \"idx: 0\", " << std::get<0>(s) << " )";
   else
-    return os << "( \"Term 1\", " << std::get<1>(s) << " )";
+    return os << "( \"idx: 1\", " << std::get<1>(s) << " )";
 }
 
 template <typename T>
 auto operator<<(std::ostream &os, S<T, Never> s) -> std::ostream & {
-  return os << "( \"Only 0\", " << std::get<0>(s) << " )";
+  return os << "( \"idx: 0\", " << std::get<0>(s) << " )";
 }
 
 template <typename U>
 auto operator<<(std::ostream &os, S<Never, U> s) -> std::ostream & {
-  return os << "( \"Only 1\", " << std::get<1>(s) << " )";
+  return os << "( \"idx: 1\", " << std::get<1>(s) << " )";
 }
 
 // clang-format off
