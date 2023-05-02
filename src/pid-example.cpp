@@ -11,26 +11,6 @@
 namespace ode = boost::numeric::odeint;
 using CState = PIDState<>;                      // AKA U
 using PState = SignalPt<std::array<double, 2>>; // AKA X
-// NB:
-// PState = SignalPt<std::array<double, 2>>
-//          ┌                ┐
-//          │        ┌   ┐   │
-//        = │  · ,   │ · │   │
-//          │        │ · │   │
-//          │        └   ┘   │
-//          └                ┘
-//            ^ Time   ^ [Position, Speed]
-//
-// On the other hand, sim::SimState is just for Boost.odeint. It
-// doesn't need time, but must be augmented with the control
-// variable:
-//
-// sim::Pstate = std::array<double, 3>
-//                ┌   ┐
-//                │ · │  // Position
-//             =  │ · │  // Speed
-//                │ · │  // control variable for Boost.odeint.
-//                └   ┘
 
 constexpr double dt = 0.001; // seconds.
 constexpr auto dts = util::double_to_duration(dt);
@@ -50,29 +30,33 @@ inline SignalPt<double> position_error(
 }
 
 struct WorldInterface {
-  const rxcpp::subjects::behavior<PState> txSubject;
-  const rxcpp::observable<PState> setPoint =
+  const rxcpp::subjects::behavior<PState> plant_subject;
+  const rxcpp::observable<PState> setpoint =
       // Setpoint to x = 1, for step response.
       rxcpp::observable<>::just(PState{now, {1., 0.}});
 
-  WorldInterface(PState x0) : txSubject(x0) {}
+  WorldInterface(PState x0) : plant_subject(x0) {}
 
   void controlled_step(CState u) {
-    auto x = txSubject.get_value();
-    sim::SimState xAugmented = {x.value[0], x.value[1], u.ctrlVal};
+    auto x = plant_subject.get_value();
+    sim::SimState x_sim = {x.value[0], x.value[1], u.ctrlVal};
 
     if ((x.time - now) >= sim_duration)
-      txSubject.get_subscriber().on_completed();
+      plant_subject.get_subscriber().on_completed();
 
     // do_step uses the second argument for both input and output.
-    stepper_.do_step(plant_, xAugmented, 0, dt);
+    stepper_.do_step(plant_, x_sim, 0, dt);
     x.time += dts;
-    x.value = {xAugmented[0], xAugmented[1]};
-    txSubject.get_subscriber().on_next(x);
+    x.value = {x_sim[0], x_sim[1]};
+    plant_subject.get_subscriber().on_next(x);
   };
 
-  auto get_state_observable() { return txSubject.get_observable(); }
-  auto time_elapsed() { return txSubject.get_value().time - now; }
+  auto get_plant_observable() {
+    return plant_subject.get_observable();
+  }
+  auto time_elapsed() {
+    return plant_subject.get_value().time - now;
+  }
 
 private:
   ode::runge_kutta4<sim::SimState> stepper_;
@@ -89,17 +73,17 @@ void step_response_test(const std::string test_title,
   WorldInterface world_ix(x0);
 
   std::vector<PState> plant_states;
-  world_ix.get_state_observable().subscribe([&](PState x) {
+  world_ix.get_plant_observable().subscribe([&](PState x) {
     plant_states.push_back(x);
   });
 
   // clang-format off
   const auto s_controls =
-      world_ix.get_state_observable()
-        | rx::combine_latest(world_ix.setPoint)
+      world_ix.get_plant_observable()
+        | rx::combine_latest(world_ix.setpoint)
         | rx::map(&position_error)
         | rx::observe_on(rxcpp::identity_current_thread())
-        | rx_scanl(u0, pid_algebra(k_p, k_i, k_d));
+        | rx::scan(u0, pid_algebra(k_p, k_i, k_d));
   // clang-format on
 
   s_controls.subscribe([&world_ix](CState u) {
@@ -115,18 +99,24 @@ void step_response_test(const std::string test_title,
         },
         plant_states);
 
-    const auto testData = util::vec_map(
+    const auto test_data = util::vec_map(
         [](const auto &x) {
           return std::make_pair(
               util::unchrono_sec(x.time - now), x.value[0]);
         },
         plant_states);
 
-    plot_with_tube(
-        test_title, filename, testData, expected_fn, margin);
+    output_and_plot(
+        test_title, filename, test_data, expected_fn, margin);
 
-    REQUIRE(util::compare_vectors(
-        simulated_positions, theoretical_positions, margin));
+    std::cout
+        << "point-differences: "
+        << report_threshold_difference(
+               simulated_positions, theoretical_positions, 0.03)
+        << std::endl;
+
+    REQUIRE(root_mean_sqr_error(
+                simulated_positions, theoretical_positions) < 0.01);
   }
 }
 
@@ -139,7 +129,8 @@ TEST_CASE(
     constexpr double k_p = 300.;
     constexpr double k_i = 0.;
     constexpr double k_d = 0.;
-    const auto title = "Test A; $(k_p, k_i, k_d) = (300., 0., 0.)$"s;
+    const auto title =
+        "Test A; $(k_p, k_i, k_d) = (300., 0., 0.)$"s;
     const auto filename = "pid-test-a"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_a, 0.03);
@@ -149,7 +140,8 @@ TEST_CASE(
     constexpr double k_p = 300.;
     constexpr double k_i = 0.;
     constexpr double k_d = 10.;
-    const auto title = "Test B; $(k_p, k_i, k_d) = (300., 0., 10.)$"s;
+    const auto title =
+        "Test B; $(k_p, k_i, k_d) = (300., 0., 10.)$"s;
     const auto filename = "pid-test-b"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_b, 0.03);
@@ -159,7 +151,8 @@ TEST_CASE(
     constexpr double k_p = 30.;
     constexpr double k_i = 70.;
     constexpr double k_d = 0.;
-    const auto title = "Test C; $(k_p, k_i, k_d) = (30., 70., 0.)$"s;
+    const auto title =
+        "Test C; $(k_p, k_i, k_d) = (30., 70., 0.)$"s;
     const auto filename = "pid-test-c"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_c, 0.03);

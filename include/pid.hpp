@@ -46,24 +46,42 @@ namespace util {
     chrono::duration<double> tAsDouble = t;
     return tAsDouble.count();
   }
+} // namespace util
 
-  template <typename T>
-  bool compare_vectors(
-      const std::vector<T> &a, const std::vector<T> &b, T margin) {
-    if (a.size() != b.size())
-      return false;
-    for (size_t i = 0; i < a.size(); i++) {
-      if (a[i] != Approx(b[i]).margin(margin)) {
-        std::cout
-            << a[i] << " @ idx[" << i << "] Should == " << b[i]
-            << std::endl;
-        return false;
-      }
+template <typename T>
+auto report_threshold_difference(const std::vector<T> &a,
+    const std::vector<T> &b, T margin) -> uint {
+
+  if (a.size() != b.size())
+    throw std::invalid_argument("Input sequence size mismatch.");
+
+  uint count = 0;
+  for (size_t i = 0; i < a.size(); i++) {
+    if (std::abs(a[i] - b[i]) > margin) {
+      std::cout
+          << a[i] << " @ idx[" << i << "] Should == " << b[i]
+          << std::endl;
+      count++;
     }
-    return true;
   }
 
-} // namespace util
+  return count;
+}
+
+auto root_mean_sqr_error(const std::vector<double> &simulated,
+    const std::vector<double> &analytical) -> double {
+
+  if (simulated.size() != analytical.size())
+    throw std::invalid_argument("Input sequence size mismatch.");
+
+  double sum_of_squares = std::inner_product(
+      simulated.begin(), simulated.end(), analytical.begin(), 0.0,
+      [](double accum, double val) { return accum + val; },
+      [](double a, double b) { return (a - b) * (a - b); });
+
+  return std::sqrt(
+      sum_of_squares / static_cast<double>(simulated.size()));
+}
 
 template <typename T = double,
     typename Clock = chrono::steady_clock>
@@ -99,20 +117,22 @@ template <typename Clock = chrono::steady_clock>
 auto pid_algebra(double kp, double ki, double kd) -> Hom<
     Doms<PIDState<Clock>, SignalPt<double, Clock>>,
     PIDState<Clock>> {
-  return [kp, ki, kd](PIDState<Clock> prev,
-             SignalPt<double, Clock> errSigl) -> PIDState<Clock> {
-    const chrono::duration<double> deltaT =
-        errSigl.time - prev.time;
-    if (deltaT <= chrono::seconds{0})
-      return prev;
-    const auto errSum =
-        std::fma(errSigl.value, deltaT.count(), prev.errSum);
-    const auto dErr = (errSigl.value - prev.error) / deltaT.count();
-    const auto ctrlVal =
-        kp * errSigl.value + ki * errSum + kd * dErr;
+  return
+      [kp, ki, kd](PIDState<Clock> prev,
+          SignalPt<double, Clock> err_signal) -> PIDState<Clock> {
+        const chrono::duration<double> deltaT =
+            err_signal.time - prev.time;
+        if (deltaT <= chrono::seconds{0})
+          return prev;
+        const auto errSum =
+            std::fma(err_signal.value, deltaT.count(), prev.errSum);
+        const auto dErr =
+            (err_signal.value - prev.error) / deltaT.count();
+        const auto ctrlVal =
+            kp * err_signal.value + ki * errSum + kd * dErr;
 
-    return {errSigl.time, errSum, errSigl.value, ctrlVal};
-  };
+        return {err_signal.time, errSum, err_signal.value, ctrlVal};
+      };
 }
 
 namespace sim {
@@ -149,54 +169,56 @@ namespace sim {
 } // namespace sim
 
 template <typename Data, typename Fn>
-void plot_with_tube(const std::string title,
+void output_and_plot(const std::string title,
     const std::string filename, const Data &data, Fn ref_func,
     double margin) {
   const std::string tubecolour = "#6699ff55";
 
-  Gnuplot gp;
-  // gp << "set term cairolatex pdf transparent\n";
-  // gp << "set output \"" << filename + ".tex" << "\"\n";
-  gp << "set title '" << title << "'\n"
-     << "plot '-' u 1:2:4 title 'acceptable margin: analytical $±"
-     << boost::format("%.3f") % margin
-     << "$' w filledcu fs solid fc rgb '" << tubecolour
-     << "', '-' u 1:2 "
-        "title 'test result' w l\n";
+  { // Plot to screen
+    Gnuplot gp;
+    // gp << "set term cairolatex pdf transparent\n";
+    // gp << "set output \"" << filename + ".tex" << "\"\n";
+    gp << "set title '" << title << "'\n"
+       << "plot '-' u 1:2:4 title 'acceptable margin: analytical $±"
+       << boost::format("%.3f") % margin
+       << "$' w filledcu fs solid fc rgb '" << tubecolour
+       << "', '-' with linespoints u 1:2 "
+          "title 'test result' w l\n";
 
-  auto range = util::vec_map(
-      [&](auto x) {
-        // with…
-        const double t = x.first;
-        const double analyt = ref_func(t);
+    auto range = util::vec_map(
+        [&](auto x) {
+          // with…
+          const double t = x.first;
+          const double analyt = ref_func(t);
 
-        return std::make_tuple(
-            t, analyt + margin, analyt, analyt - margin);
-      },
-      data);
+          return std::make_tuple(
+              t, analyt + margin, analyt, analyt - margin);
+        },
+        data);
 
-  gp.send1d(range);
-  gp.send1d(data);
+    gp.send1d(range);
+    gp.send1d(data);
 
-  gp << "pause mouse key\nwhile (mouse_char ne 'q') { pause mouse "
-        "key; }\n";
+    gp << "pause mouse key\nwhile (mouse_char ne 'q') { pause "
+          "mouse "
+          "key; }\n";
+  }
 
-  // {
-  //   std::ofstream csv;
-  //   csv.open(filename + ".csv");
-  //   for (auto &each : data) {
-  //     const double t = each.first;
-  //     const double pos = each.second;
-  //     csv << t << ", " << pos << ", " << ref_func(t) << std::endl;
-  //   }
-  // }
+  { // Output to CSV
+    std::ofstream csv;
+    csv.open(filename + ".csv");
+    for (auto &each : data) {
+      const double t = each.first;
+      const double pos = each.second;
+      csv << t << ", " << pos << ", " << ref_func(t) << std::endl;
+    }
+  }
 }
 
-using std::cos;
-using std::exp;
-using std::sin;
-
 namespace analyt {
+  using std::cos;
+  using std::exp;
+  using std::sin;
 
   double test_a(double t) {
     return -0.27291 * exp(-5 * t) * sin(17.175 * t) -
