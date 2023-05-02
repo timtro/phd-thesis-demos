@@ -22,10 +22,8 @@ constexpr double spring = 20. / mass;
 constexpr double static_force = 1. / mass;
 constexpr auto sim_duration = 2s; // seconds
 
-// position_error : (PState, PState) → SignalPt<double>
 inline SignalPt<double> position_error(
-    const std::tuple<PState, PState> &ab) {
-  const auto &[a, b] = ab;
+    PState const &a, PState const &b) {
   return {std::max(a.time, b.time), a.value[0] - b.value[0]};
 }
 
@@ -80,9 +78,7 @@ void step_response_test(const std::string test_title,
   // clang-format off
   const auto s_controls =
       world_ix.get_plant_observable()
-        | rx::combine_latest(world_ix.setpoint)
-        | rx::map(&position_error)
-        | rx::observe_on(rxcpp::identity_current_thread())
+        | rx::combine_latest(position_error, world_ix.setpoint)
         | rx::scan(u0, pid_algebra(k_p, k_i, k_d));
   // clang-format on
 
