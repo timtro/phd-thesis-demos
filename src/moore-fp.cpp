@@ -10,18 +10,11 @@
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/exclusive_scan.hpp>
 #include <range/v3/view/transform.hpp>
-#include <rxcpp/rx.hpp>
-
-namespace rx {
-  using namespace rxcpp;
-  using namespace rxcpp::operators;
-  using namespace rxcpp::sources;
-  using namespace rxcpp::util;
-} // namespace rx
-
-#include <catch2/catch.hpp>
 
 #include "moore.hpp"
+#include "rx_scanl.hpp"
+
+#include <catch2/catch.hpp>
 
 using moore::moore_to_coalgebra;
 using moore::MooreMachine;
@@ -36,14 +29,6 @@ using Output = moore::Output; // int
 using Input = moore::Input;   // int
 
 // RxCpp operators for Moore machines ..................... f[[[1
-
-template <typename I, typename S>
-auto rx_scanl(S s0, Hom<Doms<S, I>, S> f)
-    -> Hom<rx::observable<I>, rx::observable<S>> {
-  return [s0, f](rx::observable<I> obs) {
-    return obs.scan(s0, f).start_with(s0);
-  };
-}
 
 template <typename I, typename S, typename O>
 auto rx_moore_machine(MooreMachine<I, S, O> mm)
