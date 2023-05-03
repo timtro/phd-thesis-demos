@@ -9,8 +9,6 @@
 #include "rx_scanl.hpp"
 
 namespace ode = boost::numeric::odeint;
-using CState = PIDState<>;                      // AKA U
-using PState = SignalPt<std::array<double, 2>>; // AKA X
 
 constexpr double dt = 0.001; // seconds.
 constexpr auto dts = util::double_to_duration(dt);
@@ -22,22 +20,47 @@ constexpr double spring = 20. / mass;
 constexpr double static_force = 1. / mass;
 constexpr auto sim_duration = 2s; // seconds
 
-inline SignalPt<double> position_error(
-    PState const &a, PState const &b) {
-  return {std::max(a.time, b.time), a.value[0] - b.value[0]};
+auto report_threshold_difference(const std::vector<double> &a,
+    const std::vector<double> &b, double margin) -> uint {
+
+  if (a.size() != b.size())
+    throw std::invalid_argument("Input sequence size mismatch.");
+
+  uint count = 0;
+  for (size_t i = 0; i < a.size(); i++) {
+    if (std::abs(a[i] - b[i]) > margin)
+      count++;
+  }
+
+  return count;
+}
+
+auto root_mean_sqr_error(const std::vector<double> &simulated,
+    const std::vector<double> &analytical) -> double {
+
+  if (simulated.size() != analytical.size())
+    throw std::invalid_argument("Input sequence size mismatch.");
+
+  double sum_of_squares = std::inner_product(
+      simulated.begin(), simulated.end(), analytical.begin(), 0.0,
+      [](double accum, double val) { return accum + val; },
+      [](double a, double b) { return (a - b) * (a - b); });
+
+  return std::sqrt(
+      sum_of_squares / static_cast<double>(simulated.size()));
 }
 
 struct WorldInterface {
   const rxcpp::subjects::behavior<PState> plant_subject;
-  const rxcpp::observable<PState> setpoint =
+  const rxcpp::observable<SetPt> setpoint =
       // Setpoint to x = 1, for step response.
-      rxcpp::observable<>::just(PState{now, {1., 0.}});
+      rxcpp::observable<>::just(SetPt{now, 1.});
 
   WorldInterface(PState x0) : plant_subject(x0) {}
 
-  void controlled_step(CState u) {
+  void controlled_step(CState c) {
     auto x = plant_subject.get_value();
-    sim::SimState x_sim = {x.value[0], x.value[1], u.u};
+    sim::SimState x_sim = {x.value[0], x.value[1], c.value.u};
 
     if ((x.time - now) >= sim_duration)
       plant_subject.get_subscriber().on_completed();
@@ -58,12 +81,38 @@ private:
   const sim::Plant plant_ = sim::Plant(static_force, damp, spring);
 };
 
+inline auto position_error(PState const &x, SetPt const &setp)
+    -> ErrPt {
+  return {x.time, x.value[0] - setp.value};
+}
+
+auto pid_algebra(double kp, double ki, double kd)
+    -> Hom<Doms<CState, ErrPt>, CState> {
+  return [kp, ki, kd](CState prev_c, ErrPt cur_err) -> CState {
+    const chrono::duration<double> delta_t =
+        cur_err.time - prev_c.time;
+    if (delta_t <= chrono::seconds{0})
+      return prev_c;
+
+    const auto integ_err = std::fma(
+        cur_err.value, delta_t.count(), prev_c.value.err_accum);
+
+    const auto diff_err =
+        (cur_err.value - prev_c.value.error) / delta_t.count();
+
+    const auto u =
+        kp * cur_err.value + ki * integ_err + kd * diff_err;
+
+    return {cur_err.time, {integ_err, cur_err.value, u}};
+  };
+}
+
 void step_response_test(const std::string test_title,
     const std::string filename, const double k_p, const double k_i,
     const double k_d,
     const std::function<double(double)> expected_fn,
     const double margin) {
-  const CState u0 = {now, 0., 0., 0.};
+  const CState c0 = {now, {0., 0., 0.}};
   const PState x0 = {now, {0., 0.}};
   WorldInterface world_ix(x0);
 
@@ -76,7 +125,7 @@ void step_response_test(const std::string test_title,
   const auto s_controls =
       world_ix.get_plant_observable()
         | rx::combine_latest(position_error, world_ix.setpoint)
-        | rx::scan(u0, pid_algebra(k_p, k_i, k_d));
+        | rx::scan(c0, pid_algebra(k_p, k_i, k_d));
   // clang-format on
 
   s_controls.subscribe([&world_ix](CState u) {
@@ -112,6 +161,35 @@ void step_response_test(const std::string test_title,
                 simulated_positions, theoretical_positions) < 0.01);
   }
 }
+
+namespace analyt {
+  using std::cos;
+  using std::exp;
+  using std::sin;
+
+  double test_a(double t) {
+    return -0.27291 * exp(-5 * t) * sin(17.175 * t) -
+           0.9375 * exp(-5 * t) * cos(17.175 * t) + 0.9375;
+  }
+
+  double test_b(double t) {
+    return 0.042137 * exp(-10 * t) * sin(14.832 * t) -
+           0.9375 * exp(-10 * t) * cos(14.832 * t) + 0.9375;
+  }
+
+  double test_c(double t) {
+    return -0.86502 * exp(-3.9537 * t) * sin(4.2215 * t) -
+           0.83773 * exp(-3.9537 * t) * cos(4.2215 * t) -
+           0.16226 * exp(-2.0924 * t) + 0.99999;
+  }
+
+  double test_d(double t) {
+    return -0.043992 * exp(-0.95693 * t) -
+           0.017952 * exp(-5.899 * t) - 0.93805 * exp(-53.144 * t) +
+           1.0;
+  }
+
+} // namespace analyt
 
 TEST_CASE(
     "Given system and controller parameters, simulation "
