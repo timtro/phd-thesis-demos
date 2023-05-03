@@ -38,7 +38,7 @@ struct PIDState {
 //           ┌   ·   ┐  // time
 // PState =  │ ┌ · ┐ │  // position
 //           └ └ · ┘ ┘  // velocity
-//           ↑ ↑
+//           ^ ^
 //           │ value
 //           SignalPt
 using PState = SignalPt<std::array<double, 2>>;
@@ -47,7 +47,7 @@ using PState = SignalPt<std::array<double, 2>>;
 //           │ ┌ · ┐ │  // accumulated error
 // CState =  │ │ · │ │  // error
 //           └ └ · ┘ ┘  // control value
-//           ↑ ↑
+//           ^ ^
 //           │ value
 //           SignalPt
 using CState = SignalPt<PIDState>;
