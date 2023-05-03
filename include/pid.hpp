@@ -57,12 +57,8 @@ auto report_threshold_difference(const std::vector<T> &a,
 
   uint count = 0;
   for (size_t i = 0; i < a.size(); i++) {
-    if (std::abs(a[i] - b[i]) > margin) {
-      std::cout
-          << a[i] << " @ idx[" << i << "] Should == " << b[i]
-          << std::endl;
+    if (std::abs(a[i] - b[i]) > margin)
       count++;
-    }
   }
 
   return count;
@@ -108,31 +104,34 @@ namespace Signal {
 template <typename Clock = chrono::steady_clock>
 struct PIDState {
   chrono::time_point<Clock> time;
-  double errSum;
+  double err_accum;
   double error;
-  double ctrlVal;
+  double u;
 };
 
 template <typename Clock = chrono::steady_clock>
 auto pid_algebra(double kp, double ki, double kd) -> Hom<
     Doms<PIDState<Clock>, SignalPt<double, Clock>>,
     PIDState<Clock>> {
-  return
-      [kp, ki, kd](PIDState<Clock> prev,
-          SignalPt<double, Clock> err_signal) -> PIDState<Clock> {
-        const chrono::duration<double> deltaT =
-            err_signal.time - prev.time;
-        if (deltaT <= chrono::seconds{0})
-          return prev;
-        const auto errSum =
-            std::fma(err_signal.value, deltaT.count(), prev.errSum);
-        const auto dErr =
-            (err_signal.value - prev.error) / deltaT.count();
-        const auto ctrlVal =
-            kp * err_signal.value + ki * errSum + kd * dErr;
+  return [kp, ki, kd](PIDState<Clock> prev_c,
+             SignalPt<double, Clock> cur_err) -> PIDState<Clock> {
 
-        return {err_signal.time, errSum, err_signal.value, ctrlVal};
-      };
+    const chrono::duration<double> delta_t =
+        cur_err.time - prev_c.time;
+    if (delta_t <= chrono::seconds{0})
+      return prev_c;
+
+    const auto integ_err =
+        std::fma(cur_err.value, delta_t.count(), prev_c.err_accum);
+
+    const auto diff_err =
+        (cur_err.value - prev_c.error) / delta_t.count();
+
+    const auto u =
+        kp * cur_err.value + ki * integ_err + kd * diff_err;
+
+    return {cur_err.time, integ_err, cur_err.value, u};
+  };
 }
 
 namespace sim {
@@ -156,14 +155,14 @@ namespace sim {
       dxdt[1] =
           -spring_coef * x[0] - damp_coef * x[1] - x[2] +
           static_force;
-      dxdt[2] = 0.; // Control variable dynamics are external to
-                    // integration.
+      dxdt[2] = 100.; // Control variable dynamics are external to
+                      // integration.
     }
   };
 
   inline double lyapunov(
-      const SimState &s, const SimState &setPoint = {0, 0, 0}) {
-    const auto error = setPoint[0] - s[0];
+      const SimState &s, const SimState &setpoint = {0, 0, 0}) {
+    const auto error = setpoint[0] - s[0];
     return error * error + s[1] * s[1];
   }
 } // namespace sim
@@ -182,7 +181,7 @@ void output_and_plot(const std::string title,
        << "plot '-' u 1:2:4 title 'acceptable margin: analytical $±"
        << boost::format("%.3f") % margin
        << "$' w filledcu fs solid fc rgb '" << tubecolour
-       << "', '-' with linespoints u 1:2 "
+       << "', '-' u 1:2 "
           "title 'test result' w l\n";
 
     auto range = util::vec_map(
@@ -199,9 +198,7 @@ void output_and_plot(const std::string title,
     gp.send1d(range);
     gp.send1d(data);
 
-    gp << "pause mouse key\nwhile (mouse_char ne 'q') { pause "
-          "mouse "
-          "key; }\n";
+    gp << "pause mouse close\n";
   }
 
   { // Output to CSV

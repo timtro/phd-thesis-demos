@@ -37,7 +37,7 @@ struct WorldInterface {
 
   void controlled_step(CState u) {
     auto x = plant_subject.get_value();
-    sim::SimState x_sim = {x.value[0], x.value[1], u.ctrlVal};
+    sim::SimState x_sim = {x.value[0], x.value[1], u.u};
 
     if ((x.time - now) >= sim_duration)
       plant_subject.get_subscriber().on_completed();
@@ -51,9 +51,6 @@ struct WorldInterface {
 
   auto get_plant_observable() {
     return plant_subject.get_observable();
-  }
-  auto time_elapsed() {
-    return plant_subject.get_value().time - now;
   }
 
 private:
@@ -108,7 +105,7 @@ void step_response_test(const std::string test_title,
     std::cout
         << "point-differences: "
         << report_threshold_difference(
-               simulated_positions, theoretical_positions, 0.03)
+               simulated_positions, theoretical_positions, margin)
         << std::endl;
 
     REQUIRE(root_mean_sqr_error(
@@ -129,7 +126,7 @@ TEST_CASE(
         "Test A; $(k_p, k_i, k_d) = (300., 0., 0.)$"s;
     const auto filename = "pid-test-a"s;
     step_response_test(
-        title, filename, k_p, k_i, k_d, &analyt::test_a, 0.03);
+        title, filename, k_p, k_i, k_d, &analyt::test_a, 0.01);
   }
 
   SECTION("Test B (Proportional-Derivative Control)") {
@@ -140,7 +137,7 @@ TEST_CASE(
         "Test B; $(k_p, k_i, k_d) = (300., 0., 10.)$"s;
     const auto filename = "pid-test-b"s;
     step_response_test(
-        title, filename, k_p, k_i, k_d, &analyt::test_b, 0.03);
+        title, filename, k_p, k_i, k_d, &analyt::test_b, 0.01);
   }
 
   SECTION("Test C (Proportional-Integral Control)") {
@@ -151,7 +148,7 @@ TEST_CASE(
         "Test C; $(k_p, k_i, k_d) = (30., 70., 0.)$"s;
     const auto filename = "pid-test-c"s;
     step_response_test(
-        title, filename, k_p, k_i, k_d, &analyt::test_c, 0.03);
+        title, filename, k_p, k_i, k_d, &analyt::test_c, 0.01);
   }
 
   SECTION("Test D (Proportional-Integral-Derivative Control)") {
@@ -162,6 +159,6 @@ TEST_CASE(
         "Test D; $(k_p, k_i, k_d) = (350., 300., 50.)$"s;
     const auto filename = "pid-test-d"s;
     step_response_test(
-        title, filename, k_p, k_i, k_d, &analyt::test_d, 0.03);
+        title, filename, k_p, k_i, k_d, &analyt::test_d, 0.01);
   }
 }
