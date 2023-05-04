@@ -51,7 +51,7 @@ using PState = SignalPt<std::array<double, 2>>;
 //           │ value
 //           SignalPt
 using CState = SignalPt<PIDState>;
-using SetPt = SignalPt<double>;
+using SetPt = double;
 using ErrPt = SignalPt<double>;
 
 namespace sim {

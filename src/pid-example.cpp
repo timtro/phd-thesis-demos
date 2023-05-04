@@ -54,7 +54,7 @@ struct WorldInterface {
   const rxcpp::subjects::behavior<PState> plant_subject;
   const rxcpp::observable<SetPt> setpoint =
       // Setpoint to x = 1, for step response.
-      rxcpp::observable<>::just(SetPt{now, 1.});
+      rxcpp::observable<>::just(1.);
 
   WorldInterface(PState x0) : plant_subject(x0) {}
 
@@ -83,7 +83,7 @@ private:
 
 inline auto position_error(PState const &x, SetPt const &setp)
     -> ErrPt {
-  return {x.time, x.value[0] - setp.value};
+  return {x.time, x.value[0] - setp};
 }
 
 auto pid_algebra(double kp, double ki, double kd)
