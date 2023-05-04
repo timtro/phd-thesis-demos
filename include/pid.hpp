@@ -79,7 +79,7 @@ namespace sim {
 
       dxdt[2] = 0.; // Control variable dynamics are external to
                     // integration.
-      //clang-form on
+      //clang-format on
     }
   };
 } // namespace sim
@@ -97,18 +97,19 @@ namespace util {
     return result;
   }
 
-  template <typename Clock = chrono::steady_clock>
-  inline constexpr auto double_to_duration(double t) {
-    return chrono::duration_cast<typename Clock::duration>(
-        chrono::duration<double>(t));
-  }
-
-  template <typename T>
-  inline constexpr auto unchrono_sec(T t) {
-    chrono::duration<double> t_doub = t;
-    return t_doub.count();
-  }
 } // namespace util
+
+template <typename Clock = chrono::steady_clock>
+inline constexpr auto double_to_duration(double t) {
+  return chrono::duration_cast<typename Clock::duration>(
+      chrono::duration<double, std::ratio<1>>(t));
+}
+
+template <typename T>
+inline constexpr auto seconds_in(T t) {
+  chrono::duration<double, std::ratio<1>> t_doub = t;
+  return t_doub.count();
+}
 
 template <typename Data, typename Fn>
 void output_and_plot(const std::string title,

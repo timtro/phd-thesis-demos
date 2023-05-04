@@ -11,7 +11,7 @@
 namespace ode = boost::numeric::odeint;
 
 constexpr double dt = 0.001; // seconds.
-constexpr auto dts = util::double_to_duration(dt);
+constexpr auto dts = double_to_duration(dt);
 const auto start = chrono::steady_clock::now();
 
 constexpr double mass = 1.;
@@ -58,9 +58,9 @@ struct WorldInterface {
 
   WorldInterface(PState x0) : plant_subject(x0) {}
 
-  void controlled_step(CState c) {
+  void controlled_step(double u) {
     auto x = plant_subject.get_value();
-    sim::SimState x_sim = {x.value[0], x.value[1], c.value.u};
+    sim::SimState x_sim = {x.value[0], x.value[1], u};
 
     if ((x.time - start) >= sim_duration)
       plant_subject.get_subscriber().on_completed();
@@ -83,17 +83,16 @@ private:
 
 inline auto position_error(PState const &x, SetPt const &setp)
     -> ErrPt {
-  return {x.time, setp - x.value[0] };
+  return {x.time, setp - x.value[0]};
 }
 
 auto pid_algebra(double k_p, double k_i, double k_d)
     -> Hom<Doms<CState, ErrPt>, CState> {
   return [k_p, k_i, k_d](CState prev_c, ErrPt cur_err) -> CState {
-    const chrono::duration<double> delta_t =
-        cur_err.time - prev_c.time;
+    const auto delta_t = seconds_in(cur_err.time - prev_c.time);
 
     // clang-format off
-    if (delta_t <= 0s) // Default to P-control if Δt ≤ 0
+    if (delta_t <= 0) // Default to P-control if Δt ≤ 0
       return  {prev_c.time,
                 { prev_c.value.error
                 , prev_c.value.err_accum
@@ -101,11 +100,11 @@ auto pid_algebra(double k_p, double k_i, double k_d)
                 }};
     // clang-format on
 
-    const auto integ_err = std::fma(
-        cur_err.value, delta_t.count(), prev_c.value.err_accum);
+    const auto integ_err =
+        std::fma(cur_err.value, delta_t, prev_c.value.err_accum);
 
     const auto diff_err =
-        (cur_err.value - prev_c.value.error) / delta_t.count();
+        (cur_err.value - prev_c.value.error) / delta_t;
 
     const auto u =
         k_p * cur_err.value + k_i * integ_err + k_d * diff_err;
@@ -113,6 +112,8 @@ auto pid_algebra(double k_p, double k_i, double k_d)
     return {cur_err.time, {integ_err, cur_err.value, u}};
   };
 }
+
+std::vector<std::pair<std::string, double>> rmses;
 
 void step_response_test(const std::string test_title,
     const std::string filename, const double k_p, const double k_i,
@@ -132,10 +133,11 @@ void step_response_test(const std::string test_title,
   const auto s_controls =
       world_ix.get_plant_observable()
         | rx::combine_latest(position_error, world_ix.setpoint)
-        | rx::scan(c0, pid_algebra(k_p, k_i, k_d));
+        | rx::scan(c0, pid_algebra(k_p, k_i, k_d))
+        | rx::map([](CState c) -> double { return c.value.u; });
   // clang-format on
 
-  s_controls.subscribe([&world_ix](CState u) {
+  s_controls.subscribe([&world_ix](double u) {
     world_ix.controlled_step(u);
   });
 
@@ -144,14 +146,14 @@ void step_response_test(const std::string test_title,
         [](auto x) { return x.value[0]; }, plant_states);
     auto theoretical_positions = util::vec_map(
         [&](auto x) {
-          return expected_fn(util::unchrono_sec(x.time - start));
+          return expected_fn(seconds_in(x.time - start));
         },
         plant_states);
 
     const auto test_data = util::vec_map(
         [](const auto &x) {
           return std::make_pair(
-              util::unchrono_sec(x.time - start), x.value[0]);
+              seconds_in(x.time - start), x.value[0]);
         },
         plant_states);
 
@@ -164,8 +166,12 @@ void step_response_test(const std::string test_title,
                simulated_positions, theoretical_positions, margin)
         << std::endl;
 
-    REQUIRE(root_mean_sqr_error(
-                simulated_positions, theoretical_positions) < 0.01);
+    auto rmse = root_mean_sqr_error(
+        simulated_positions, theoretical_positions);
+
+    rmses.emplace_back(filename, rmse);
+
+    REQUIRE(rmse < 0.01);
   }
 }
 
@@ -246,4 +252,16 @@ TEST_CASE(
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_d, 0.01);
   }
+
+  // Nastiness for RMSE table:
+  std::cout << "       ";
+  for (auto &each : rmses) {
+    std::cout << each.first << "   ";
+  }
+  std::cout << std::endl << " RMSE  ";
+  for (auto &each : rmses) {
+    std::cout <<
+        std::scientific << std::setprecision(3) << each.second << "    ";
+  }
+  std::cout << std::endl;
 }
