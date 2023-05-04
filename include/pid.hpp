@@ -118,14 +118,21 @@ void output_and_plot(const std::string title,
 
   { // Plot to screen
     Gnuplot gp;
+    std::string dark_orange = "#ff8c00";
+    std::string darker_orange = "#d55501";
     // gp << "set term cairolatex pdf transparent\n";
     // gp << "set output \"" << filename + ".tex" << "\"\n";
+    gp << "set term wxt background \"#222222\"\n";
+    gp << "set title textcolor rgb \"#cccccc\"\n";
+    gp << "set border linecolor rgb \"#cccccc\"\n";
+    gp << "set xtics textcolor rgb \"#cccccc\"\n";
+    gp << "set xlabel textcolor rgb \"#cccccc\"\n";
+    gp << "set ylabel textcolor rgb \"#cccccc\"\n";
+    gp << "set key textcolor rgb \"#cccccc\" box linecolor rgb \"#cccccc\"\n";
+    gp << "set style line 1 lc rgb \"#cccccc\" lt 1 lw 2\n";
     gp << "set title '" << title << "'\n"
-       << "plot '-' u 1:2:4 title 'acceptable margin: analytical $±"
-       << boost::format("%.3f") % margin
-       << "$' w filledcu fs solid fc rgb '" << tubecolour
-       << "', '-' u 1:2 "
-          "title 'test result' w l\n";
+       << "plot '-' u 1:3 w l lc rgb '" << darker_orange << "' title 'Analytical solution' "
+       << ", '-' u 1:2 w l lc rgb '" << dark_orange << "' title 'test result'\n";
 
     auto range = util::vec_map(
         [&](auto x) {
