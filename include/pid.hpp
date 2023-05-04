@@ -71,20 +71,17 @@ namespace sim {
 
     void operator()(const sim::SimState &x, sim::SimState &dxdt,
         double /*time*/) const {
+      // clang-format off
       dxdt[0] = x[1];
-      dxdt[1] =
-          -spring_coef * x[0] - damp_coef * x[1] - x[2] +
-          static_force;
+      dxdt[1] = -spring_coef * x[0]
+                  - damp_coef * x[1] 
+                    + x[2] + static_force;
+
       dxdt[2] = 0.; // Control variable dynamics are external to
                     // integration.
+      //clang-form on
     }
   };
-
-  inline double lyapunov(
-      const SimState &s, const SimState &setpoint = {0, 0, 0}) {
-    const auto error = setpoint[0] - s[0];
-    return error * error + s[1] * s[1];
-  }
 } // namespace sim
 
 namespace util {
@@ -106,10 +103,10 @@ namespace util {
         chrono::duration<double>(t));
   }
 
-  template <typename A>
-  inline constexpr auto unchrono_sec(A t) {
-    chrono::duration<double> tAsDouble = t;
-    return tAsDouble.count();
+  template <typename T>
+  inline constexpr auto unchrono_sec(T t) {
+    chrono::duration<double> t_doub = t;
+    return t_doub.count();
   }
 } // namespace util
 

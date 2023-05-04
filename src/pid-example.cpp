@@ -12,7 +12,7 @@ namespace ode = boost::numeric::odeint;
 
 constexpr double dt = 0.001; // seconds.
 constexpr auto dts = util::double_to_duration(dt);
-const auto now = chrono::steady_clock::now();
+const auto start = chrono::steady_clock::now();
 
 constexpr double mass = 1.;
 constexpr double damp = 10. / mass;
@@ -62,7 +62,7 @@ struct WorldInterface {
     auto x = plant_subject.get_value();
     sim::SimState x_sim = {x.value[0], x.value[1], c.value.u};
 
-    if ((x.time - now) >= sim_duration)
+    if ((x.time - start) >= sim_duration)
       plant_subject.get_subscriber().on_completed();
 
     // do_step uses the second argument for both input and output.
@@ -83,16 +83,23 @@ private:
 
 inline auto position_error(PState const &x, SetPt const &setp)
     -> ErrPt {
-  return {x.time, x.value[0] - setp};
+  return {x.time, setp - x.value[0] };
 }
 
-auto pid_algebra(double kp, double ki, double kd)
+auto pid_algebra(double k_p, double k_i, double k_d)
     -> Hom<Doms<CState, ErrPt>, CState> {
-  return [kp, ki, kd](CState prev_c, ErrPt cur_err) -> CState {
+  return [k_p, k_i, k_d](CState prev_c, ErrPt cur_err) -> CState {
     const chrono::duration<double> delta_t =
         cur_err.time - prev_c.time;
-    if (delta_t <= chrono::seconds{0})
-      return prev_c;
+
+    // clang-format off
+    if (delta_t <= 0s) // Default to P-control if Δt ≤ 0
+      return  {prev_c.time,
+                { prev_c.value.error
+                , prev_c.value.err_accum
+                , k_p * cur_err.value
+                }};
+    // clang-format on
 
     const auto integ_err = std::fma(
         cur_err.value, delta_t.count(), prev_c.value.err_accum);
@@ -101,7 +108,7 @@ auto pid_algebra(double kp, double ki, double kd)
         (cur_err.value - prev_c.value.error) / delta_t.count();
 
     const auto u =
-        kp * cur_err.value + ki * integ_err + kd * diff_err;
+        k_p * cur_err.value + k_i * integ_err + k_d * diff_err;
 
     return {cur_err.time, {integ_err, cur_err.value, u}};
   };
@@ -112,8 +119,8 @@ void step_response_test(const std::string test_title,
     const double k_d,
     const std::function<double(double)> expected_fn,
     const double margin) {
-  const CState c0 = {now, {0., 0., 0.}};
-  const PState x0 = {now, {0., 0.}};
+  const CState c0 = {start, {0., 0., 0.}};
+  const PState x0 = {start, {0., 0.}};
   WorldInterface world_ix(x0);
 
   std::vector<PState> plant_states;
@@ -137,14 +144,14 @@ void step_response_test(const std::string test_title,
         [](auto x) { return x.value[0]; }, plant_states);
     auto theoretical_positions = util::vec_map(
         [&](auto x) {
-          return expected_fn(util::unchrono_sec(x.time - now));
+          return expected_fn(util::unchrono_sec(x.time - start));
         },
         plant_states);
 
     const auto test_data = util::vec_map(
         [](const auto &x) {
           return std::make_pair(
-              util::unchrono_sec(x.time - now), x.value[0]);
+              util::unchrono_sec(x.time - start), x.value[0]);
         },
         plant_states);
 
