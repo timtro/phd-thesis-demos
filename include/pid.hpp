@@ -111,6 +111,38 @@ inline constexpr auto seconds_in(T t) {
   return t_doub.count();
 }
 
+namespace tokyo {
+  std::string bg_dark = "#1f2335";
+  std::string bg = "#24283b";
+  std::string bg_highlight = "#292e42";
+  std::string terminal_black = "#414868";
+  std::string fg = "#c0caf5";
+  std::string fg_dark = "#a9b1d6";
+  std::string fg_gutter = "#3b4261";
+  std::string dark3 = "#545c7e";
+  std::string comment = "#565f89";
+  std::string dark5 = "#737aa2";
+  std::string blue0 = "#3d59a1";
+  std::string blue = "#7aa2f7";
+  std::string cyan = "#7dcfff";
+  std::string blue1 = "#2ac3de";
+  std::string blue2 = "#0db9d7";
+  std::string blue5 = "#89ddff";
+  std::string blue6 = "#b4f9f8";
+  std::string blue7 = "#394b70";
+  std::string magenta = "#bb9af7";
+  std::string magenta2 = "#ff007c";
+  std::string purple = "#9d7cd8";
+  std::string orange = "#ff9e64";
+  std::string yellow = "#e0af68";
+  std::string green = "#9ece6a";
+  std::string green1 = "#73daca";
+  std::string green2 = "#41a6b5";
+  std::string teal = "#1abc9c";
+  std::string red = "#f7768e";
+  std::string red1 = "#db4b4b";
+}
+
 template <typename Data, typename Fn>
 void output_and_plot(const std::string title,
     const std::string filename, const Data &data, Fn ref_func,
@@ -119,21 +151,23 @@ void output_and_plot(const std::string title,
 
   { // Plot to screen
     Gnuplot gp;
-    std::string dark_orange = "#ff8c00";
-    std::string darker_orange = "#d55501";
+    std::string bg_colour = tokyo::bg_dark;
+    std::string fg_colour = tokyo::fg_dark;
+    std::string analyt_colour = tokyo::blue;
+    std::string sim_colour = tokyo::magenta;
     // gp << "set term cairolatex pdf transparent\n";
     // gp << "set output \"" << filename + ".tex" << "\"\n";
-    gp << "set term wxt background \"#222222\"\n";
-    gp << "set title textcolor rgb \"#cccccc\"\n";
-    gp << "set border linecolor rgb \"#cccccc\"\n";
-    gp << "set xtics textcolor rgb \"#cccccc\"\n";
-    gp << "set xlabel textcolor rgb \"#cccccc\"\n";
-    gp << "set ylabel textcolor rgb \"#cccccc\"\n";
-    gp << "set key textcolor rgb \"#cccccc\" box linecolor rgb \"#cccccc\"\n";
-    gp << "set style line 1 lc rgb \"#cccccc\" lt 1 lw 2\n";
+    gp << "set term wxt background \"" << bg_colour << "\"\n";
+    gp << "set title textcolor rgb \"" << fg_colour << "\"\n";
+    gp << "set border linecolor rgb \"" << fg_colour << "\"\n";
+    gp << "set xtics textcolor rgb \"" << fg_colour << "\"\n";
+    gp << "set xlabel textcolor rgb \"" << fg_colour << "\"\n";
+    gp << "set ylabel textcolor rgb \"" << fg_colour << "\"\n";
+    gp << "set key textcolor rgb \"" << fg_colour << "\" box linecolor rgb \"" << fg_colour << "\"\n";
+    gp << "set style line 1 lc rgb \"" << fg_colour << "\" lt 1 lw 2\n";
     gp << "set title '" << title << "'\n"
-       << "plot '-' u 1:3 w l lc rgb '" << darker_orange << "' title 'Analytical solution' "
-       << ", '-' u 1:2 w l lc rgb '" << dark_orange << "' title 'test result'\n";
+       << "plot '-' u 1:3 w l lc rgb '" << analyt_colour << "' title 'Analytical solution' "
+       << ", '-' u 1:2 w l lc rgb '" << sim_colour << "' title 'test result'\n";
 
     auto range = util::vec_map(
         [&](auto x) {

@@ -214,7 +214,7 @@ TEST_CASE(
     constexpr double k_i = 0.;
     constexpr double k_d = 0.;
     const auto title =
-        "Test A; $(k_p, k_i, k_d) = (300., 0., 0.)$"s;
+        "Test A; (k_p, k_i, k_d) = (300., 0., 0.)"s;
     const auto filename = "pid-test-a"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_a, 0.01);
@@ -225,7 +225,7 @@ TEST_CASE(
     constexpr double k_i = 0.;
     constexpr double k_d = 10.;
     const auto title =
-        "Test B; $(k_p, k_i, k_d) = (300., 0., 10.)$"s;
+        "Test B; (k_p, k_i, k_d) = (300., 0., 10.)"s;
     const auto filename = "pid-test-b"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_b, 0.01);
@@ -236,7 +236,7 @@ TEST_CASE(
     constexpr double k_i = 70.;
     constexpr double k_d = 0.;
     const auto title =
-        "Test C; $(k_p, k_i, k_d) = (30., 70., 0.)$"s;
+        "Test C; (k_p, k_i, k_d) = (30., 70., 0.)"s;
     const auto filename = "pid-test-c"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_c, 0.01);
@@ -247,7 +247,7 @@ TEST_CASE(
     constexpr double k_i = 300.;
     constexpr double k_d = 50.;
     const auto title =
-        "Test D; $(k_p, k_i, k_d) = (350., 300., 50.)$"s;
+        "Test D; (k_p, k_i, k_d) = (350., 300., 50.)"s;
     const auto filename = "pid-test-d"s;
     step_response_test(
         title, filename, k_p, k_i, k_d, &analyt::test_d, 0.01);
