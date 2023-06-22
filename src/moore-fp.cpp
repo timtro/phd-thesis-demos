@@ -16,13 +16,12 @@
 
 #include <catch2/catch.hpp>
 
-using moore::moore_to_coalgebra;
-using moore::MooreMachine;
-using moore::snoc_scanify;
 using moore::M;
 using moore::M_map;
 using moore::MCoalgebra;
 using moore::moore_to_coalgebra;
+using moore::MooreMachine;
+using moore::snoc_scanify;
 
 using State = moore::State;   // int
 using Output = moore::Output; // int
@@ -241,4 +240,35 @@ TEST_CASE(
       REQUIRE(range_exclusive_scan() == drop_last(running_sum));
     }
   }
+}
+
+TEST_CASE("Box Filter From Background Ch.") {
+
+  auto sum_buffer =
+      [](const std::vector<double> &buffer) -> double {
+    auto sum = std::accumulate(buffer.begin(), buffer.end(), 0.);
+    return sum / buffer.size();
+  };
+
+  auto source =
+      rxcpp::observable<>::range(1, 10)
+        | rx::map([](auto x) -> double { return (double) x; });
+
+  auto output = source
+                  | rx::buffer(5, 1)
+                  // | rx::tap([](std::vector<double> v){
+                  //       std::cout << "tapped: ";
+                  //       for (auto& each : v) {
+                  //         std:: cout << each << ' ';
+                  //       }
+                  //       std::cout << std::endl;
+                  //     })
+                  | rx::map(sum_buffer);
+
+  output.subscribe(
+      [](double x) {
+        printf("OnNext: %.2f", x);
+        printf("\n");
+      },
+      []() { printf("OnComplete\n"); });
 }

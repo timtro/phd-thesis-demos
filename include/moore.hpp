@@ -77,7 +77,7 @@ namespace moore {
   auto moore_to_coalgebra(MooreMachine<I, S, O> mm)
       -> MCoalgebra<S> {
     return [mm](S s) {
-      return M<S>{curry(mm.tmap)(s), mm.rmap(s)};
+      return M<S>{pcurry(mm.tmap)(s), mm.rmap(s)};
     };
   }
 
