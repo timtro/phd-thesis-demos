@@ -242,33 +242,54 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("Box Filter From Background Ch.") {
-
-  auto sum_buffer =
+TEST_CASE("RxCpp box filter test.") {
+  // clang-format off
+  auto avg_buffer =
       [](const std::vector<double> &buffer) -> double {
     auto sum = std::accumulate(buffer.begin(), buffer.end(), 0.);
     return sum / buffer.size();
   };
 
+  const auto start_time = std::chrono::steady_clock::now();
+  const auto now_string = [&start_time]() -> std::string {
+      auto now = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>
+        (now - start_time).count();
+      std::ostringstream oss;
+      oss << "[" << std::setw(4) 
+                 << std::setfill(' ') 
+          << duration << " μs]";
+      return oss.str();
+  };
+
   auto source =
-      rxcpp::observable<>::range(1, 10)
+      rx::observable<>::range(1, 6)
         | rx::map([](auto x) -> double { return (double) x; });
 
-  auto output = source
-                  | rx::buffer(5, 1)
-                  // | rx::tap([](std::vector<double> v){
-                  //       std::cout << "tapped: ";
-                  //       for (auto& each : v) {
-                  //         std:: cout << each << ' ';
-                  //       }
-                  //       std::cout << std::endl;
-                  //     })
-                  | rx::map(sum_buffer);
+  constexpr auto bufw = 3;
+
+  auto output =
+    source
+      | rx::tap([&](double x){
+          printf("%s src: %.2f\n", now_string().c_str(), x); })
+      | rx::buffer(bufw, 1)
+      | rx::take_while([](auto& v){return v.size() == bufw;})
+      | rx::tap([&](const std::vector<double>& v){
+          printf("%s buf: ", now_string().c_str());
+          for (const auto& each : v) printf("%.2f ", each);
+          printf("\n");
+      })
+      | rx::map(avg_buffer);
+
+  auto output_record = std::vector<double>();
 
   output.subscribe(
-      [](double x) {
-        printf("OnNext: %.2f", x);
-        printf("\n");
+      [&](double x) {
+        printf("%s OnNext: %.2f\n", now_string().c_str(), x);
+        output_record.push_back(x);
       },
-      []() { printf("OnComplete\n"); });
+      [&](){ printf("%s OnComplete\n", now_string().c_str()); });
+
+  REQUIRE( output_record == std::vector<double>{2., 3., 4., 5.} );
+  // clang-format on
 }
