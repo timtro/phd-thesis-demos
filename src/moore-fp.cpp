@@ -38,6 +38,18 @@ auto rx_moore_machine(MooreMachine<I, S, O> mm)
 }
 
 // ........................................................ f]]]1
+
+template <typename I, typename S, typename O>
+auto rang_v3_moore_machine(MooreMachine<I, S, O> mm)
+    -> Hom<std::vector<I>, std::vector<S>> {
+  using namespace ranges;
+  return [mm](std::vector<I> i_s) {
+      const auto o_s =
+          i_s | views::exclusive_scan(0, mm.tmap) | views::transform(mm.rmap);
+      return std::vector(std::cbegin(o_s), std::cend(o_s));
+  };
+}
+
 // Utilities .............................................. f[[[1
 
 template <typename T>
@@ -111,9 +123,9 @@ TEST_CASE(
   }
 
   AND_GIVEN(
-      "A $𝘗^*_I$-algebra embodying $f$ and $s0$, and "
+      "A $\\pProd{I}$-algebra embodying $δ$ and $s₀$, and "
       "corresponding I/O response function "
-      "$\\mathtt{phi} = r ∘ ⦇\\mathtt{alg}⦈$") {
+      "$𝘉\\,$mm = r ∘ ⦇\\mathtt{alg}⦈$") {
     auto alg = moore_to_snoc_algebra(mm);
     auto phi = compose(mm.rmap, SnocF<Input>::cata<State>(alg));
 
@@ -223,21 +235,10 @@ TEST_CASE(
       "combinator to accumulate state using f and then "
       "views::transform to map state to output.") {
 
-    auto range_exclusive_scan =
-        [&i_s, &mm]() -> std::vector<Output> {
-      const auto [s0, f, r] = mm;
-
-      using namespace ranges;
-      const auto u_s =
-          i_s | views::exclusive_scan(0, f) | views::transform(r);
-
-      return std::vector(std::cbegin(u_s), std::cend(u_s));
-    };
-
     THEN("the function should return a running sum including "
          "the initial state but without the last output "
          "value.") {
-      REQUIRE(range_exclusive_scan() == drop_last(running_sum));
+      REQUIRE(rang_v3_moore_machine(mm)(i_s) == drop_last(running_sum));
     }
   }
 }
