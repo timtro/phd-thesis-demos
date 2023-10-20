@@ -125,7 +125,7 @@ TEST_CASE(
   AND_GIVEN(
       "A $\\pProd{I}$-algebra embodying $δ$ and $s₀$, and "
       "corresponding I/O response function "
-      "$𝘉\\,$mm = r ∘ ⦇\\mathtt{alg}⦈$") {
+      "phi$=𝘉\\,$mm = r ∘ ⦇\\mathtt{alg}⦈$") {
     auto alg = moore_to_snoc_algebra(mm);
     auto phi = compose(mm.rmap, SnocF<Input>::cata<State>(alg));
 
